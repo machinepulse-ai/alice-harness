@@ -33,6 +33,11 @@ express does.
   Worker, partition and gate concurrency of the coverage and snapshot lanes are
   sized for the 4-vCPU hosted runner (upstream's values assume 16 cores and
   oversubscribe it into timing-dependent coverage and e2e failures).
+  The coverage lane is informational (`continue-on-error`, not in
+  `all-checks-passed`): the unit suite's process-containment tests need a user
+  systemd manager for transient scopes, which the hosted runner does not provide
+  by default; the lane tries `loginctl enable-linger` first. Make it required
+  again once it is green.
   The spec files that described the old lane set follow
   (`scripts/ci-workflow.spec.ts`, `scripts/ci-compatible-selfhosted.spec.ts`,
   `scripts/tests/ci-master-platforms.spec.ts`).

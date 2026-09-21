@@ -118,6 +118,42 @@ const pwshCoverageExclusions = spawnSync(resolvePwshPath(), ['-NoLogo', '-NoProf
       'packages/shell/pwsh-sandbox/src/**/*.ts',
     ]
 
+// Hosts without a usable user-systemd manager (GitHub-hosted runners; see
+// ALICE_MODIFICATIONS.md) cannot run the Linux process-containment suites:
+// their kill, abort and timeout cases launch transient user scopes.
+// DSH_TEST_SKIP_USER_SYSTEMD=1 drops those suites, and the real-shell PTY
+// suite that depends on the same host, from every project.
+const userSystemdSuites = process.env.DSH_TEST_SKIP_USER_SYSTEMD === '1'
+  ? [
+      'packages/shell/bash-local/tests/executor.spec.ts',
+      'packages/shell/bash-sandbox/tests/sandbox.spec.ts',
+      'packages/shell/pwsh-local/tests/executor.spec.ts',
+      'packages/shell/tool-bash/tests/tools.spec.ts',
+      'packages/shell/tool-pwsh/tests/integration.spec.ts',
+      'packages/subprocess/subprocess-local/tests/local.spec.ts',
+      // Real interactive shells in a PTY, settled on idle-silence windows that a
+      // loaded 4-vCPU runner misses (empty pwsh motd).
+      'packages/terminal/terminal-bash/tests/local.spec.ts',
+    ]
+  : []
+
+// The Alice build ships the ACP runtime and nothing else. DSH_TEST_SKIP_UNSHIPPED=1
+// drops the suites of what it does not ship: pre-stable prototypes, the Web
+// client and its apps, the editor hook bridges, the E2B and webhook seams,
+// the test-support and repository-tooling suites.
+const unshippedSuites = process.env.DSH_TEST_SKIP_UNSHIPPED === '1'
+  ? [
+      'packages/experimental/**',
+      'packages/client/**',
+      'packages/hooks/**',
+      'packages/e2b/**',
+      'packages/webhook/**',
+      'packages/test-support/**',
+      'apps/**',
+      'scripts/**',
+    ]
+  : []
+
 const testIncludes = [
   'packages/*/*/tests/**/*.spec.{ts,tsx}',
   'apps/*/tests/**/*.spec.ts',
@@ -161,7 +197,7 @@ export default defineConfig({
     setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts'],
     // .tsx: client component specs (jsdom via per-file @vitest-environment pragma).
     include: testIncludes,
-    exclude: platformUnsupportedTests,
+    exclude: [...platformUnsupportedTests, ...userSystemdSuites, ...unshippedSuites],
     // One coverage invocation aggregates both projects. Every suite forks for
     // Node stability; process-bound suites stay separate for inventory control.
     projects: [
@@ -178,6 +214,8 @@ export default defineConfig({
           include: testIncludes,
           exclude: [
             ...platformUnsupportedTests,
+            ...userSystemdSuites,
+            ...unshippedSuites,
             ...processBoundTests,
             ...coverageExemptExcludes,
           ],
@@ -193,6 +231,8 @@ export default defineConfig({
           include: processBoundTests,
           exclude: [
             ...platformUnsupportedTests,
+            ...userSystemdSuites,
+            ...unshippedSuites,
             ...coverageExemptExcludes,
           ],
         },

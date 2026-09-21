@@ -74,3 +74,20 @@ express does.
   every hosted run.
 - **Upstreamable** — yes, the same rot hits upstream's hosted lanes. Drop this
   entry once upstream moves the pin.
+
+## The ACP bridge streams assistant text and thoughts as the model produces them
+
+- **What** — `packages/acp/acp` subscribes to `agent/assistant-stream` for the
+  Agents it owns and relays each `text-delta` as an `agent_message_chunk` and each
+  `reasoning-delta` as an `agent_thought_chunk`, on the same ordered per-session
+  chain as tool lifecycle and usage. When the message commits, the blocks that
+  already streamed are skipped, so a client sees each block exactly once.
+  Recorded ACP snapshots refreshed; README pair and an Agent Note
+  (`.agents/notes/implemented/feature/2026-09-21-acp-live-assistant-stream.md`)
+  describe it.
+- **Why** — Alice drives this runtime over ACP and shows the answer in a chat. The
+  bridge only projected committed messages, so a long text answer stayed invisible
+  until its last token, indistinguishable from a stall.
+- **Upstreamable** — yes: a pure addition to the bridge. The one behavior upstream
+  may not want is that a model attempt failing after it streamed leaves its partial
+  text on the wire; ACP has no update that retracts delivered text.

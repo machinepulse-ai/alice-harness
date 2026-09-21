@@ -8,20 +8,24 @@ import { assistantBlockToAcp } from './content.ts'
 
 /**
  * Convert one committed assistant message and its context usage in block order.
+ * Text and thought blocks whose deltas already went out live are skipped, so a
+ * client sees each of them exactly once; every other block still projects here.
  * @param ctx - bridge context carrying attachment and token-meter services.
  * @param session - durable session used for context pressure.
  * @param event - committed assistant message event.
+ * @param streamed - which block kinds this message's attempt already streamed.
  * @returns ordered standard thought, message, and optional usage updates.
  */
 export async function assistantUpdates(
   ctx: Context,
   session: Session,
   event: SessionEvent<'assistant/message'>,
+  streamed: { text: boolean; thought: boolean } = { text: false, thought: false },
 ): Promise<SessionUpdate[]> {
   const updates: SessionUpdate[] = []
   for (const block of event.data.message.content) {
     if (block.type === 'reasoning') {
-      if (block.text.length > 0) {
+      if (block.text.length > 0 && !streamed.thought) {
         updates.push({
           sessionUpdate: 'agent_thought_chunk',
           messageId: event.data.message.id,
@@ -30,6 +34,7 @@ export async function assistantUpdates(
       }
       continue
     }
+    if (block.type === 'text' && streamed.text) continue
     const content = await assistantBlockToAcp(ctx, block)
     if (content !== undefined) {
       updates.push({

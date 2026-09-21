@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-Pull request 跑 `alice-ci.yml`，在 GitHub 托管的 `ubuntu-24.04` 上两个 job。一个 job 构建（同时对两个编译面做 typecheck）、lint、回放 `snapshots/` 下运行时的录制会话，再用发布所用的同一命令构建 linux-x64 单文件可执行程序。另一个跑不带逐文件 100% 覆盖率门槛的单元测试，受 `vitest.config.ts` 两个开关约束：`DSH_TEST_SKIP_UNSHIPPED=1` 跳过本构建不发布的部分（原型、Web 客户端及其应用、编辑器钩子桥、E2B、webhook、test-support、仓库工具）的用例，`DSH_TEST_SKIP_USER_SYSTEMD=1` 跳过六个 Linux 进程收容用例文件——它们的 kill、中止与超时用例要启动瞬态的用户 systemd scope，托管跑机上 `loginctl enable-linger` 能让 `systemd-run --user --scope` 成功，但 scope 的引导进程从不运行。上游的 `ci.yml` 与其余上游工作流原样留在树里，同步不冲突、引用它们的 Agent Note 与 spec 仍能解析，并在仓库的 Actions 设置里停用；`ALICE_MODIFICATIONS.md` 列出了清单。
+Pull request 跑 `alice-ci.yml`，在 GitHub 托管的 `ubuntu-24.04` 上两个 job。一个 job 构建（同时对两个编译面做 typecheck）、lint、回放 `snapshots/` 下运行时的录制会话，再用发布所用的同一命令构建 linux-x64 单文件可执行程序。另一个跑不带逐文件 100% 覆盖率门槛的单元测试，受 `vitest.config.ts` 两个开关约束：`DSH_TEST_SKIP_UNSHIPPED=1` 跳过本构建不发布的部分（原型、Web 客户端及其应用、编辑器钩子桥、E2B、webhook、test-support、仓库工具）的用例，`DSH_TEST_SKIP_USER_SYSTEMD=1` 跳过真实交互 shell 的终端用例文件（在负载中的 4 核跑机上 pwsh 的 motd 会是空的）和六个 Linux 进程收容用例文件——它们的 kill、中止与超时用例要启动瞬态的用户 systemd scope，托管跑机上 `loginctl enable-linger` 能让 `systemd-run --user --scope` 成功，但 scope 的引导进程从不运行。上游的 `ci.yml` 与其余上游工作流原样留在树里，同步不冲突、引用它们的 Agent Note 与 spec 仍能解析，并在仓库的 Actions 设置里停用；`ALICE_MODIFICATIONS.md` 列出了清单。
 
 ## Alternatives considered
 

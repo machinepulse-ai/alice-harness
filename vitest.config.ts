@@ -121,7 +121,8 @@ const pwshCoverageExclusions = spawnSync(resolvePwshPath(), ['-NoLogo', '-NoProf
 // Hosts without a usable user-systemd manager (GitHub-hosted runners; see
 // ALICE_MODIFICATIONS.md) cannot run the Linux process-containment suites:
 // their kill, abort and timeout cases launch transient user scopes.
-// DSH_TEST_SKIP_USER_SYSTEMD=1 drops those suites from every project.
+// DSH_TEST_SKIP_USER_SYSTEMD=1 drops those suites, and the real-shell PTY
+// suite that depends on the same host, from every project.
 const userSystemdSuites = process.env.DSH_TEST_SKIP_USER_SYSTEMD === '1'
   ? [
       'packages/shell/bash-local/tests/executor.spec.ts',
@@ -130,6 +131,9 @@ const userSystemdSuites = process.env.DSH_TEST_SKIP_USER_SYSTEMD === '1'
       'packages/shell/tool-bash/tests/tools.spec.ts',
       'packages/shell/tool-pwsh/tests/integration.spec.ts',
       'packages/subprocess/subprocess-local/tests/local.spec.ts',
+      // Real interactive shells in a PTY, settled on idle-silence windows that a
+      // loaded 4-vCPU runner misses (empty pwsh motd).
+      'packages/terminal/terminal-bash/tests/local.spec.ts',
     ]
   : []
 

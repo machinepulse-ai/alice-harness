@@ -35,7 +35,9 @@ express does.
   alice-ultra's `scripts/build-harness.sh` runs. `unit tests`: `vitest run` with
   20 s per test and no per-file 100% coverage bar, under two `vitest.config.ts`
   switches: `DSH_TEST_SKIP_USER_SYSTEMD=1` excludes the six Linux
-  process-containment suites (their kill, abort and timeout cases launch
+  process-containment suites and the real-shell terminal suite
+  (`terminal-bash/tests/local.spec.ts`, whose pwsh motd arrives empty on a
+  loaded 4-vCPU runner); the containment cases' kill, abort and timeout paths launch
   transient user-systemd scopes, and on the hosted runner the scope starts but
   its bootstrap never runs, even after `loginctl enable-linger` made
   `systemd-run --user --scope` succeed), and `DSH_TEST_SKIP_UNSHIPPED=1`

@@ -23,3 +23,26 @@ express does.
 - **Re-applying after an upstream sync** — the conflicts are the quoted copies,
   not the logic. Take upstream's side everywhere, then re-run the substitution
   above over the tree and rebuild.
+
+## CI runs on GitHub-hosted runners only
+
+- **What** — `.github/workflows/ci.yml`: the three Linux lanes run on
+  `ubuntu-24.04` instead of the `dsh-ubuntu-24-04-16core` enterprise pool, the
+  self-hosted failover switches (`DSH_CI_FAILOVER_*`) are gone, the four Windows
+  lanes are removed, and the Python runtime matrix builds `node24-linux-x64` only.
+  The spec files that described the old lane set follow
+  (`scripts/ci-workflow.spec.ts`, `scripts/ci-compatible-selfhosted.spec.ts`,
+  `scripts/tests/ci-master-platforms.spec.ts`).
+  The upstream-only workflows are not deleted — deleting them would break the
+  Agent Notes and specs that reference them on every sync — but are **disabled in
+  this repository's Actions settings** (`gh workflow disable`), which persists
+  across pushes: Build PR preview (Cloudflare), Issue lifecycle, Issue policy,
+  weighted-approval (both), CI master, Sandbox, Deploy documentation, E2E (all
+  three), Node Addon System (both), Release (dsh, vendor, publish ×2, Python).
+- **Why** — none of that infrastructure exists in machinepulse-ai: the enterprise
+  runner labels never get a runner, so every PR sat on "pending" forever; the
+  other workflows need DeepSeek's GitHub App, a Cloudflare token, self-hosted
+  pools, or publish to npm/PyPI, which this build must never do.
+- **Upstreamable** — no. On an upstream sync, take upstream's `ci.yml` and
+  re-apply this trim; check `gh workflow list --all` still shows the same set
+  disabled.

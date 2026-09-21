@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-`ci.yml` 保留 Linux 车道并改跑在 GitHub 托管的 `ubuntu-24.04` 上，coverage 与 snapshot 车道的 worker、分区与关卡并发按它的 4 个 vCPU 设定——上游的取值假定 16 核跑机，在小跑机上会过载成依赖时序的覆盖率缺口与 e2e 超时；故障转移开关与四条 Windows 车道移除，Python 运行时矩阵只构建 `node24-linux-x64`。coverage 车道只作参考、不作为必需：单元测试里的进程收容用例要启动瞬态的用户 systemd scope，托管跑机默认没有用户管理器，除非先启动一个（`loginctl enable-linger`），车道会先尝试；验证通过后再把它改回必需。描述工作流形状的 spec 按这套车道更新。仅上游需要的工作流仍留在树里——引用它们的 Agent Note 与 spec 在同步后仍能解析——改为在仓库的 Actions 设置里停用；`ALICE_MODIFICATIONS.md` 列出了清单。
+`ci.yml` 保留 Linux 车道并改跑在 GitHub 托管的 `ubuntu-24.04` 上，coverage 与 snapshot 车道的 worker、分区与关卡并发按它的 4 个 vCPU 设定——上游的取值假定 16 核跑机，在小跑机上会过载成依赖时序的覆盖率缺口与 e2e 超时；故障转移开关与四条 Windows 车道移除，Python 运行时矩阵只构建 `node24-linux-x64`。coverage 车道改为普通单元测试车道，不作为必需：去掉逐文件 100% 的覆盖率门槛，并通过 `DSH_TEST_SKIP_USER_SYSTEMD=1` 跳过六个 Linux 进程收容用例文件——它们的 kill、中止与超时用例要启动瞬态的用户 systemd scope，托管跑机上 `loginctl enable-linger` 能让 `systemd-run --user --scope` 成功，但 scope 的引导进程从不运行。这些用例在开发机和上游照常运行。描述工作流形状的 spec 按这套车道更新。仅上游需要的工作流仍留在树里——引用它们的 Agent Note 与 spec 在同步后仍能解析——改为在仓库的 Actions 设置里停用；`ALICE_MODIFICATIONS.md` 列出了清单。
 
 ## Alternatives considered
 

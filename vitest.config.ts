@@ -118,6 +118,21 @@ const pwshCoverageExclusions = spawnSync(resolvePwshPath(), ['-NoLogo', '-NoProf
       'packages/shell/pwsh-sandbox/src/**/*.ts',
     ]
 
+// Hosts without a usable user-systemd manager (GitHub-hosted runners; see
+// ALICE_MODIFICATIONS.md) cannot run the Linux process-containment suites:
+// their kill, abort and timeout cases launch transient user scopes.
+// DSH_TEST_SKIP_USER_SYSTEMD=1 drops those suites from every project.
+const userSystemdSuites = process.env.DSH_TEST_SKIP_USER_SYSTEMD === '1'
+  ? [
+      'packages/shell/bash-local/tests/executor.spec.ts',
+      'packages/shell/bash-sandbox/tests/sandbox.spec.ts',
+      'packages/shell/pwsh-local/tests/executor.spec.ts',
+      'packages/shell/tool-bash/tests/tools.spec.ts',
+      'packages/shell/tool-pwsh/tests/integration.spec.ts',
+      'packages/subprocess/subprocess-local/tests/local.spec.ts',
+    ]
+  : []
+
 const testIncludes = [
   'packages/*/*/tests/**/*.spec.{ts,tsx}',
   'apps/*/tests/**/*.spec.ts',
@@ -161,7 +176,7 @@ export default defineConfig({
     setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts'],
     // .tsx: client component specs (jsdom via per-file @vitest-environment pragma).
     include: testIncludes,
-    exclude: platformUnsupportedTests,
+    exclude: [...platformUnsupportedTests, ...userSystemdSuites],
     // One coverage invocation aggregates both projects. Every suite forks for
     // Node stability; process-bound suites stay separate for inventory control.
     projects: [
@@ -178,6 +193,7 @@ export default defineConfig({
           include: testIncludes,
           exclude: [
             ...platformUnsupportedTests,
+            ...userSystemdSuites,
             ...processBoundTests,
             ...coverageExemptExcludes,
           ],
@@ -193,6 +209,7 @@ export default defineConfig({
           include: processBoundTests,
           exclude: [
             ...platformUnsupportedTests,
+            ...userSystemdSuites,
             ...coverageExemptExcludes,
           ],
         },

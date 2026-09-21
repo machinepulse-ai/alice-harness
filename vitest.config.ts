@@ -133,6 +133,23 @@ const userSystemdSuites = process.env.DSH_TEST_SKIP_USER_SYSTEMD === '1'
     ]
   : []
 
+// The Alice build ships the ACP runtime and nothing else. DSH_TEST_SKIP_UNSHIPPED=1
+// drops the suites of what it does not ship: pre-stable prototypes, the Web
+// client and its apps, the editor hook bridges, the E2B and webhook seams,
+// the test-support and repository-tooling suites.
+const unshippedSuites = process.env.DSH_TEST_SKIP_UNSHIPPED === '1'
+  ? [
+      'packages/experimental/**',
+      'packages/client/**',
+      'packages/hooks/**',
+      'packages/e2b/**',
+      'packages/webhook/**',
+      'packages/test-support/**',
+      'apps/**',
+      'scripts/**',
+    ]
+  : []
+
 const testIncludes = [
   'packages/*/*/tests/**/*.spec.{ts,tsx}',
   'apps/*/tests/**/*.spec.ts',
@@ -176,7 +193,7 @@ export default defineConfig({
     setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts'],
     // .tsx: client component specs (jsdom via per-file @vitest-environment pragma).
     include: testIncludes,
-    exclude: [...platformUnsupportedTests, ...userSystemdSuites],
+    exclude: [...platformUnsupportedTests, ...userSystemdSuites, ...unshippedSuites],
     // One coverage invocation aggregates both projects. Every suite forks for
     // Node stability; process-bound suites stay separate for inventory control.
     projects: [
@@ -194,6 +211,7 @@ export default defineConfig({
           exclude: [
             ...platformUnsupportedTests,
             ...userSystemdSuites,
+            ...unshippedSuites,
             ...processBoundTests,
             ...coverageExemptExcludes,
           ],
@@ -210,6 +228,7 @@ export default defineConfig({
           exclude: [
             ...platformUnsupportedTests,
             ...userSystemdSuites,
+            ...unshippedSuites,
             ...coverageExemptExcludes,
           ],
         },

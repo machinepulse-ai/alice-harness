@@ -26,20 +26,23 @@ express does.
 
 ## Pull-request CI is the Alice workflow, not upstream's
 
-- **What** — `.github/workflows/alice-ci.yml` runs on every pull request with
-  four checks and one aggregate: typecheck + lint + documentation gates, the
-  unit suite (`vitest run`, 20 s per test, no per-file 100% coverage bar),
-  the recorded-session snapshot replay (build, then `vitest run --config
-  vitest.snapshot.config.ts snapshots/` — the runtime's acp, sdk and session
-  recordings; the Web client's snapshots under `apps/web/tests` need Chromium and
-  are left out), and the linux-x64 single-executable build
-  (`build-exe-for-python-sdk.yml`, the same pipeline alice-ultra's release
-  uses). The unit lane sets `DSH_TEST_SKIP_USER_SYSTEMD=1`, a switch added to
-  `vitest.config.ts` that excludes the six Linux process-containment suites:
-  their kill, abort and timeout cases launch transient user-systemd scopes, and
-  on the hosted runner the scope starts but its bootstrap never runs, even
-  after `loginctl enable-linger` made `systemd-run --user --scope` succeed.
-  Those suites still run on developer machines and upstream.
+- **What** — `.github/workflows/alice-ci.yml` runs on every pull request as two
+  hosted jobs plus an aggregate. `build, lint, snapshots, runtime`: `pnpm run
+  build` (tsc for both faces, so it is the typecheck), `lint:contracts-ready`,
+  the recorded-session replay of `snapshots/` (acp, sdk, session — the Web
+  client's snapshots under `apps/web/tests` need Chromium and are left out),
+  then the linux-x64 single-executable build with the exact command
+  alice-ultra's `scripts/build-harness.sh` runs. `unit tests`: `vitest run` with
+  20 s per test and no per-file 100% coverage bar, under two `vitest.config.ts`
+  switches: `DSH_TEST_SKIP_USER_SYSTEMD=1` excludes the six Linux
+  process-containment suites (their kill, abort and timeout cases launch
+  transient user-systemd scopes, and on the hosted runner the scope starts but
+  its bootstrap never runs, even after `loginctl enable-linger` made
+  `systemd-run --user --scope` succeed), and `DSH_TEST_SKIP_UNSHIPPED=1`
+  excludes what this build does not ship (`packages/experimental`, `client`,
+  `hooks`, `e2b`, `webhook`, `test-support`, `apps/`, `scripts/`). Both sets
+  still run on developer machines and upstream. The documentation gates
+  (`pnpm run test:docs`) are not in CI; run them by hand when touching docs.
   Upstream's `ci.yml` and every other upstream workflow are unchanged in the
   tree — deleting them would conflict on every sync and break the Agent Notes
   and specs that link to them — and are **disabled in this repository's

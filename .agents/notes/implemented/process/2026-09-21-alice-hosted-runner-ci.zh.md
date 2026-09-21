@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-Pull request 跑 `alice-ci.yml`：在 GitHub 托管的 `ubuntu-24.04` 上做四项检查——typecheck、lint 与文档关卡；不带逐文件 100% 覆盖率门槛的单元测试；录制会话经发布 profile 的快照回放；以及经发布所用的同一可复用工作流构建 linux-x64 单文件可执行程序。单元测试车道设 `DSH_TEST_SKIP_USER_SYSTEMD=1`，这是 `vitest.config.ts` 新增的开关，跳过六个 Linux 进程收容用例文件——它们的 kill、中止与超时用例要启动瞬态的用户 systemd scope，托管跑机上 `loginctl enable-linger` 能让 `systemd-run --user --scope` 成功，但 scope 的引导进程从不运行。上游的 `ci.yml` 与其余上游工作流原样留在树里，同步不冲突、引用它们的 Agent Note 与 spec 仍能解析，并在仓库的 Actions 设置里停用；`ALICE_MODIFICATIONS.md` 列出了清单。
+Pull request 跑 `alice-ci.yml`，在 GitHub 托管的 `ubuntu-24.04` 上两个 job。一个 job 构建（同时对两个编译面做 typecheck）、lint、回放 `snapshots/` 下运行时的录制会话，再用发布所用的同一命令构建 linux-x64 单文件可执行程序。另一个跑不带逐文件 100% 覆盖率门槛的单元测试，受 `vitest.config.ts` 两个开关约束：`DSH_TEST_SKIP_UNSHIPPED=1` 跳过本构建不发布的部分（原型、Web 客户端及其应用、编辑器钩子桥、E2B、webhook、test-support、仓库工具）的用例，`DSH_TEST_SKIP_USER_SYSTEMD=1` 跳过六个 Linux 进程收容用例文件——它们的 kill、中止与超时用例要启动瞬态的用户 systemd scope，托管跑机上 `loginctl enable-linger` 能让 `systemd-run --user --scope` 成功，但 scope 的引导进程从不运行。上游的 `ci.yml` 与其余上游工作流原样留在树里，同步不冲突、引用它们的 Agent Note 与 spec 仍能解析，并在仓库的 Actions 设置里停用；`ALICE_MODIFICATIONS.md` 列出了清单。
 
 ## Alternatives considered
 
@@ -22,4 +22,4 @@ Pull request 跑 `alice-ci.yml`：在 GitHub 托管的 `ubuntu-24.04` 上做四�
 
 ## Consequences
 
-一个 pull request 花四个托管 job 而不是十二个，`all checks passed` 在这里能变绿。本仓库不验证 Windows、Node 22 与 26、benchmark、npm 发布 lint、Python SDK 与 Web 客户端。同步上游时复查 `gh workflow list --all` 以及 `alice-ci.yml` 调用的脚本名。
+一个 pull request 花两个托管 job 而不是十二个，`all checks passed` 在这里能变绿。文档关卡手动跑，不进 CI。本仓库不验证 Windows、Node 22 与 26、benchmark、npm 发布 lint、Python SDK 与 Web 客户端。同步上游时复查 `gh workflow list --all` 以及 `alice-ci.yml` 调用的脚本名。

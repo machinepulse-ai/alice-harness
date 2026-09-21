@@ -10,7 +10,7 @@ This repository is the Alice build of the harness, owned by machinepulse-ai. Ups
 
 ## Decision
 
-`ci.yml` keeps the Linux lanes and runs them on GitHub-hosted `ubuntu-24.04`; the failover switches and the four Windows lanes are removed, and the Python runtime matrix builds `node24-linux-x64` only. The workflow-shape specs describe this lane set. The upstream-only workflows stay in the tree, so the Agent Notes and specs that reference them keep resolving across syncs, and are disabled in the repository's Actions settings instead; `ALICE_MODIFICATIONS.md` lists them.
+`ci.yml` keeps the Linux lanes and runs them on GitHub-hosted `ubuntu-24.04`, with the coverage and snapshot lanes' worker, partition and gate concurrency sized for its four vCPUs — upstream's values assume a 16-core runner and oversubscribe a small one into timing-dependent coverage gaps and e2e timeouts; the failover switches and the four Windows lanes are removed, and the Python runtime matrix builds `node24-linux-x64` only. The workflow-shape specs describe this lane set. The upstream-only workflows stay in the tree, so the Agent Notes and specs that reference them keep resolving across syncs, and are disabled in the repository's Actions settings instead; `ALICE_MODIFICATIONS.md` lists them.
 
 ## Alternatives considered
 

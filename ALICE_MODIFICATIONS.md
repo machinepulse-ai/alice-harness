@@ -30,6 +30,9 @@ express does.
   `ubuntu-24.04` instead of the `dsh-ubuntu-24-04-16core` enterprise pool, the
   self-hosted failover switches (`DSH_CI_FAILOVER_*`) are gone, the four Windows
   lanes are removed, and the Python runtime matrix builds `node24-linux-x64` only.
+  Worker, partition and gate concurrency of the coverage and snapshot lanes are
+  sized for the 4-vCPU hosted runner (upstream's values assume 16 cores and
+  oversubscribe it into timing-dependent coverage and e2e failures).
   The spec files that described the old lane set follow
   (`scripts/ci-workflow.spec.ts`, `scripts/ci-compatible-selfhosted.spec.ts`,
   `scripts/tests/ci-master-platforms.spec.ts`).

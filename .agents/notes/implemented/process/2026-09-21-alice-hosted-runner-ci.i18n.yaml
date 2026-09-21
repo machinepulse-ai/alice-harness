@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-21-alice-hosted-runner-ci.md
-2026-09-21-alice-hosted-runner-ci.md: 97cef02f9e0dbece339487d7302152c99cc08ff8
-2026-09-21-alice-hosted-runner-ci.zh.md: 3d5a8489efc46215850336f06d2326e3da094f2b
+2026-09-21-alice-hosted-runner-ci.md: 309459a544a128b06a74cd8584724c17efc43a73
+2026-09-21-alice-hosted-runner-ci.zh.md: 5c7f7f9cc19a125854e1846bac4bcd8e7c48b857

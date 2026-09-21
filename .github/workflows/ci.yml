@@ -82,6 +82,9 @@ jobs:
           DSH_ARCHIVE_BASE_REF: ${{ github.event.pull_request.base.sha }}
         run: pnpm run check:ci:static
 
+  # Worker, partition and gate concurrency below are sized for the 4-vCPU
+  # hosted runner; upstream's values assume a 16-core enterprise runner and
+  # oversubscribe it into timing-dependent coverage and e2e failures.
   node-24-coverage:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
@@ -89,9 +92,9 @@ jobs:
     env:
       # Partitioning replaces the instrumented share; this budget gives the
       # exempt-heavy gate two workers on both hosted and failover runners.
-      DSH_COVERAGE_MAX_WORKERS: '6'
-      DSH_COVERAGE_PARTITIONS: '4'
-      DSH_GATE_CONCURRENCY: '3'
+      DSH_COVERAGE_MAX_WORKERS: '2'
+      DSH_COVERAGE_PARTITIONS: '2'
+      DSH_GATE_CONCURRENCY: '1'
       # A gate failure aborts the sibling gate instead of waiting out its
       # multi-minute instrumented run.
       DSH_GATE_FAIL_FAST: '1'
@@ -201,16 +204,16 @@ jobs:
     runs-on: ubuntu-24.04
     name: node 24 / snapshots and artifacts
     env:
-      DSH_GATE_CONCURRENCY: '10'
+      DSH_GATE_CONCURRENCY: '1'
       DSH_NODE_COMPAT_SKIP_TYPECHECK: '1'
-      DSH_OXLINT_THREADS: '8'
-      DSH_PUBLINT_CONCURRENCY: '8'
-      DSH_WEB_SNAPSHOT_WORKERS: '6'
+      DSH_OXLINT_THREADS: '4'
+      DSH_PUBLINT_CONCURRENCY: '4'
+      DSH_WEB_SNAPSHOT_WORKERS: '2'
       # A failing gate aborts its running siblings: a failing build stops the
       # independent Node compatibility smoke, and a failing reader (e.g.
       # publint) stops the remaining artifact consumers.
       DSH_GATE_FAIL_FAST: '1'
-      DSH_SNAPSHOT_MAX_CONCURRENCY: '32'
+      DSH_SNAPSHOT_MAX_CONCURRENCY: '4'
     steps:
       # Runner cleanup owns tool caches and fixtures, including cancelled runs.
       - name: Use runner-owned temporary storage

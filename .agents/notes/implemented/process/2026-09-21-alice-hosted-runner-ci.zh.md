@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-`ci.yml` 保留 Linux 车道并改跑在 GitHub 托管的 `ubuntu-24.04` 上；故障转移开关与四条 Windows 车道移除，Python 运行时矩阵只构建 `node24-linux-x64`。描述工作流形状的 spec 按这套车道更新。仅上游需要的工作流仍留在树里——引用它们的 Agent Note 与 spec 在同步后仍能解析——改为在仓库的 Actions 设置里停用；`ALICE_MODIFICATIONS.md` 列出了清单。
+`ci.yml` 保留 Linux 车道并改跑在 GitHub 托管的 `ubuntu-24.04` 上，coverage 与 snapshot 车道的 worker、分区与关卡并发按它的 4 个 vCPU 设定——上游的取值假定 16 核跑机，在小跑机上会过载成依赖时序的覆盖率缺口与 e2e 超时；故障转移开关与四条 Windows 车道移除，Python 运行时矩阵只构建 `node24-linux-x64`。描述工作流形状的 spec 按这套车道更新。仅上游需要的工作流仍留在树里——引用它们的 Agent Note 与 spec 在同步后仍能解析——改为在仓库的 Actions 设置里停用；`ALICE_MODIFICATIONS.md` 列出了清单。
 
 ## Alternatives considered
 

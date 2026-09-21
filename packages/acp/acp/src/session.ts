@@ -10,7 +10,7 @@ import {
   type SessionNotification,
   type StopReason,
 } from '@agentclientprotocol/sdk'
-import type { Agent, AgentHandle, AgentOptions, ModelSelection } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentHandle, AgentOptions, AssistantStreamFrame, ModelSelection } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, errorChain, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { type Session, type SessionEvent, type SessionId, type TurnEndReason } from '@deepseek-ai/dsh-session'
 import { AcpContentError, admitAcpPrompt } from './content.ts'
@@ -61,6 +61,22 @@ interface InflightPrompt {
   agentError: Error | undefined
 }
 
+/**
+ * The one model attempt whose deltas are on the wire right now. Its durable
+ * settlement arrives as an `assistant/message` event before the `end` frame, so
+ * the settlement's text and thought blocks are recognized by turn and step and
+ * not sent a second time.
+ */
+interface LiveAttempt {
+  attemptId: string
+  turn: number
+  step: number
+  /** Whether at least one text delta went out for this attempt. */
+  streamedText: boolean
+  /** Whether at least one reasoning delta went out for this attempt. */
+  streamedThought: boolean
+}
+
 /** Standard invalid-parameter failure with protocol-safe detail. */
 function invalidParams(detail: string): RequestError {
   return RequestError.invalidParams(undefined, detail)
@@ -100,6 +116,7 @@ export class AcpSession {
   readonly agent: Agent
   private readonly modelControl: AcpModelControl
   private outputTail = Promise.resolve()
+  private liveAttempt: LiveAttempt | undefined
   private inflight: InflightPrompt | undefined
   private closing: Promise<void> | undefined
   private readonly pendingSelections = new Map<string, ModelSelection>()
@@ -346,9 +363,10 @@ export class AcpSession {
     try {
       if (event.type === 'assistant/message') {
         const inflight = this.inflight?.turn === event.data.turn ? this.inflight : undefined
+        const streamed = this.streamedFor(event)
         const previous = this.outputTail
         const delivery = previous.then(async () => {
-          for (const update of await assistantUpdates(this.ctx, session, event)) {
+          for (const update of await assistantUpdates(this.ctx, session, event, streamed)) {
             await this.notify({ sessionId: this.agent.session.id, update })
           }
         })
@@ -386,6 +404,65 @@ export class AcpSession {
       }
       if (event.type === 'turn/end') this.modelControl.releaseTurn(event.data.turn)
     }
+  }
+
+  /**
+   * Relay one live model attempt as it streams: text deltas as message chunks,
+   * reasoning deltas as thought chunks, on the same ordered chain as every
+   * other update. Tool calls stay on their durable events. A retried attempt
+   * streams again from the start; the protocol has no way to retract a delta,
+   * so its replaced prefix stays on the wire.
+   * @param frame - process-local frame from this session's Agent.
+   */
+  onAssistantStream(frame: AssistantStreamFrame): void {
+    switch (frame.type) {
+      case 'start':
+        this.liveAttempt = {
+          attemptId: frame.attemptId,
+          turn: frame.turn,
+          step: frame.step,
+          streamedText: false,
+          streamedThought: false,
+        }
+        return
+      case 'chunk': {
+        const attempt = this.liveAttempt
+        if (attempt === undefined || attempt.attemptId !== frame.attemptId) return
+        const chunk = frame.chunk
+        let update: SessionNotification['update']
+        if (chunk.type === 'text-delta' && chunk.text.length > 0) {
+          attempt.streamedText = true
+          update = { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: chunk.text } }
+        } else if (chunk.type === 'reasoning-delta' && chunk.text.length > 0) {
+          attempt.streamedThought = true
+          update = { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: chunk.text } }
+        } else {
+          return
+        }
+        const previous = this.outputTail
+        this.outputTail = previous
+          .then(() => this.notify({ sessionId: this.agent.session.id, update }))
+          /* v8 ignore start -- the bridge notifier contains transport rejection. */
+          .catch((error: unknown) => {
+            this.ctx.logger.warn(`acp: live chunk delivery failed: ${errorChain(error)}`)
+          })
+        /* v8 ignore stop */
+        return
+      }
+      case 'end':
+        if (this.liveAttempt?.attemptId === frame.attemptId) this.liveAttempt = undefined
+        return
+    }
+  }
+
+  /** Which block kinds of a settling message already went out as live deltas. */
+  private streamedFor(event: SessionEvent<'assistant/message'>): { text: boolean; thought: boolean } {
+    const attempt = this.liveAttempt
+    if (attempt === undefined
+      || event.surfaceOp !== 'append'
+      || attempt.turn !== event.data.turn
+      || attempt.step !== event.data.step) return { text: false, thought: false }
+    return { text: attempt.streamedText, thought: attempt.streamedThought }
   }
 
   /**

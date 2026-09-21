@@ -46,3 +46,13 @@ express does.
 - **Upstreamable** — no. On an upstream sync, take upstream's `ci.yml` and
   re-apply this trim; check `gh workflow list --all` still shows the same set
   disabled.
+
+## CI's bubblewrap pin follows the current Ubuntu package
+
+- **What** — `scripts/prepare-ci-bubblewrap.sh` pins `bubblewrap_0.9.0-1ubuntu0.3`
+  (sha256 `2461f1be…`) instead of `0.9.0-1ubuntu0.1`.
+- **Why** — archive.ubuntu.com drops a superseded security build; the old pin
+  returns 404, so the coverage and snapshot lanes died in their first step on
+  every hosted run.
+- **Upstreamable** — yes, the same rot hits upstream's hosted lanes. Drop this
+  entry once upstream moves the pin.

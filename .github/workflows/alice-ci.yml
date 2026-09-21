@@ -1,0 +1,152 @@
+# The Alice build's pull-request CI: the four checks that protect the runtime
+# alice-ultra ships, on GitHub-hosted runners. Upstream's ci.yml stays in the
+# tree for syncs but is disabled in this repository's Actions settings; the
+# reasons are in ALICE_MODIFICATIONS.md.
+name: Alice CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24'
+  # Never report to the production telemetry endpoint from CI.
+  DSH_TELEMETRY_DISABLED: '1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: typecheck, lint, docs
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Configure pnpm store path
+        id: pnpm-store
+        run: |
+          store_root="$HOME/.local/share/pnpm/store"
+          echo "PNPM_CONFIG_STORE_DIR=$store_root" >> "$GITHUB_ENV"
+          echo "path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-node-${{ env.NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ env.NODE_VERSION }}-pnpm-
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck (builds the host lib on the way)
+        run: pnpm run typecheck
+      - name: Lint
+        run: pnpm run lint:contracts-ready
+      - name: Documentation gates
+        run: pnpm run test:docs
+
+  unit-tests:
+    name: unit tests
+    runs-on: ubuntu-24.04
+    env:
+      # The six Linux process-containment suites launch transient user-systemd
+      # scopes, which the hosted runner cannot complete; vitest.config.ts skips
+      # them under this switch. They still run on developer machines.
+      DSH_TEST_SKIP_USER_SYSTEMD: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Configure pnpm store path
+        id: pnpm-store
+        run: |
+          store_root="$HOME/.local/share/pnpm/store"
+          echo "PNPM_CONFIG_STORE_DIR=$store_root" >> "$GITHUB_ENV"
+          echo "path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-node-${{ env.NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ env.NODE_VERSION }}-pnpm-
+      - name: Install dependencies and prepare bubblewrap
+        run: |
+          pnpm install --frozen-lockfile &
+          install_pid=$!
+          bash scripts/prepare-ci-bubblewrap.sh &
+          sandbox_pid=$!
+          wait "$install_pid" && wait "$sandbox_pid"
+      - name: Unit tests (20s per test on a 4-vCPU runner)
+        run: pnpm run build:native-system && pnpm exec vitest run --testTimeout=20000
+
+  snapshots:
+    name: recorded-session snapshots
+    runs-on: ubuntu-24.04
+    env:
+      DSH_GATE_FAIL_FAST: '1'
+      DSH_SNAPSHOT_MAX_CONCURRENCY: '4'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Configure pnpm store path
+        id: pnpm-store
+        run: |
+          store_root="$HOME/.local/share/pnpm/store"
+          echo "PNPM_CONFIG_STORE_DIR=$store_root" >> "$GITHUB_ENV"
+          echo "path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-node-${{ env.NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ env.NODE_VERSION }}-pnpm-
+      - name: Install dependencies and prepare bubblewrap
+        run: |
+          pnpm install --frozen-lockfile &
+          install_pid=$!
+          bash scripts/prepare-ci-bubblewrap.sh &
+          sandbox_pid=$!
+          wait "$install_pid" && wait "$sandbox_pid"
+      - name: Build, then replay the recorded sessions through the shipped profiles
+        run: pnpm run check:ci:snapshot
+
+  runtime:
+    name: runtime build
+    uses: ./.github/workflows/build-exe-for-python-sdk.yml
+    with:
+      targets: node24-linux-x64
+      ci: true
+
+  all-checks-passed:
+    name: all checks passed
+    runs-on: ubuntu-latest
+    needs: [static, unit-tests, snapshots, runtime]
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Fail if any needed job did not succeed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: |
+          echo "::error::Needed job results: ${{ join(needs.*.result, ', ') }}"
+          exit 1
+      - run: echo "All needed jobs succeeded (${{ join(needs.*.result, ', ') }})"

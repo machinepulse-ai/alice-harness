@@ -607,12 +607,6 @@ describe('Node 24 lane ownership', () => {
 })
 
 describe('Linux primary graph', () => {
-  it('omits the web browser snapshot when DSH_CI_SKIP_WEB_SNAPSHOT is set', () => {
-    const subject = withEnv('DSH_CI_SKIP_WEB_SNAPSHOT', '1', () => withPnpmEntrypoint(() => gatesForMode('ci-consumers')))
-    expect(subject.map(item => item.id)).not.toContain('web-snapshot')
-    expect(subject).toHaveLength(10)
-  })
-
   it('adds the same compare-only web gate after built client artifacts', () => {
     const subject = withPnpmEntrypoint(() => gatesForMode('ci-linux-primary'))
     const web = subject.find(item => item.id === 'web-snapshot')

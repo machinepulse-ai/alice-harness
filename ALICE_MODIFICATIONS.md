@@ -24,43 +24,39 @@ express does.
   not the logic. Take upstream's side everywhere, then re-run the substitution
   above over the tree and rebuild.
 
-## CI runs on GitHub-hosted runners only
+## Pull-request CI is the Alice workflow, not upstream's
 
-- **What** — `.github/workflows/ci.yml`: the three Linux lanes run on
-  `ubuntu-24.04` instead of the `dsh-ubuntu-24-04-16core` enterprise pool, the
-  self-hosted failover switches (`DSH_CI_FAILOVER_*`) are gone, the four Windows
-  lanes are removed, and the Python runtime matrix builds `node24-linux-x64` only.
-  Worker, partition and gate concurrency of the coverage and snapshot lanes are
-  sized for the 4-vCPU hosted runner (upstream's values assume 16 cores and
-  oversubscribe it into timing-dependent coverage and e2e failures).
-  The coverage lane became a plain unit-test lane (`vitest run`, no per-file
-  100% bar), not in `all-checks-passed`. It sets `DSH_TEST_SKIP_USER_SYSTEMD=1`,
-  which `vitest.config.ts` turns into an exclusion of the six Linux
-  process-containment suites: their kill, abort and timeout cases launch
-  transient user-systemd scopes, and on the hosted runner the scope starts but
-  its bootstrap never runs, even after `loginctl enable-linger` made
-  `systemd-run --user --scope` succeed. Those suites still run on developer
-  machines and upstream.
-  The snapshot lane sets `DSH_CI_SKIP_WEB_SNAPSHOT=1`, a new switch in
-  `scripts/run-gates.ts` that omits the Playwright web-browser snapshot gate:
-  this fork ships no Web client, and that gate was the slowest (10 min) and the
-  one that flaked on the hosted runner.
-  The spec files that described the old lane set follow
-  (`scripts/ci-workflow.spec.ts`, `scripts/ci-compatible-selfhosted.spec.ts`,
-  `scripts/tests/ci-master-platforms.spec.ts`).
-  The upstream-only workflows are not deleted — deleting them would break the
-  Agent Notes and specs that reference them on every sync — but are **disabled in
-  this repository's Actions settings** (`gh workflow disable`), which persists
-  across pushes: Build PR preview (Cloudflare), Issue lifecycle, Issue policy,
-  weighted-approval (both), CI master, Sandbox, Deploy documentation, E2E (all
-  three), Node Addon System (both), Release (dsh, vendor, publish ×2, Python).
-- **Why** — none of that infrastructure exists in machinepulse-ai: the enterprise
-  runner labels never get a runner, so every PR sat on "pending" forever; the
-  other workflows need DeepSeek's GitHub App, a Cloudflare token, self-hosted
-  pools, or publish to npm/PyPI, which this build must never do.
-- **Upstreamable** — no. On an upstream sync, take upstream's `ci.yml` and
-  re-apply this trim; check `gh workflow list --all` still shows the same set
-  disabled.
+- **What** — `.github/workflows/alice-ci.yml` runs on every pull request with
+  four checks and one aggregate: typecheck + lint + documentation gates, the
+  unit suite (`vitest run`, 20 s per test, no per-file 100% coverage bar),
+  the recorded-session snapshot replay (`check:ci:snapshot` = build + replay
+  through the shipped profiles), and the linux-x64 single-executable build
+  (`build-exe-for-python-sdk.yml`, the same pipeline alice-ultra's release
+  uses). The unit lane sets `DSH_TEST_SKIP_USER_SYSTEMD=1`, a switch added to
+  `vitest.config.ts` that excludes the six Linux process-containment suites:
+  their kill, abort and timeout cases launch transient user-systemd scopes, and
+  on the hosted runner the scope starts but its bootstrap never runs, even
+  after `loginctl enable-linger` made `systemd-run --user --scope` succeed.
+  Those suites still run on developer machines and upstream.
+  Upstream's `ci.yml` and every other upstream workflow are unchanged in the
+  tree — deleting them would conflict on every sync and break the Agent Notes
+  and specs that link to them — and are **disabled in this repository's
+  Actions settings** (`gh workflow disable`; persists across pushes):
+  CI, CI master, Expected filenames, Build PR preview (Cloudflare), Issue
+  lifecycle, Issue policy, weighted-approval (both), Sandbox, Deploy
+  documentation, E2E (all three), Node Addon System (both), Release (dsh,
+  vendor, publish ×2, Python).
+- **Why** — this CI runs on company resources for a runtime that ships one
+  ACP profile. Upstream's matrix (enterprise 16-core pools that never get a
+  runner here, four Windows lanes, three Node versions, benchmarks, npm
+  publishing lint, Python SDK tests, a 10-minute Playwright web-client lane)
+  proves things this build does not ship, and its runner pools, GitHub App,
+  Cloudflare token and npm/PyPI publishing do not exist in machinepulse-ai.
+- **Upstreamable** — no. An upstream sync leaves `alice-ci.yml` untouched; if
+  upstream renames a script this workflow calls (`typecheck`,
+  `lint:contracts-ready`, `test:docs`, `check:ci:snapshot`,
+  `build:native-system`), follow the rename here, and check
+  `gh workflow list --all` still shows the upstream set disabled.
 
 ## CI's bubblewrap pin follows the current Ubuntu package
 

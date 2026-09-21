@@ -473,9 +473,7 @@ function ciConsumerGates(): Gate[] {
     }),
     snapshotGate(validatedBuild),
     expectedOutputGate(validatedBuild),
-    // A deployment that ships no Web client (the Alice build; see
-    // ALICE_MODIFICATIONS.md) drops the browser lane with this switch.
-    ...process.env.DSH_CI_SKIP_WEB_SNAPSHOT === '1' ? [] : [webSnapshotGate(validatedBuild, buildArtifactReaders)],
+    webSnapshotGate(validatedBuild, buildArtifactReaders),
     pnpmScript('doc-typecheck', 'doc-typecheck:contracts-ready', {
       needs: validatedBuild,
       env: { DSH_DOC_TYPECHECK_USE_BUILD_OUTPUT: '1' },

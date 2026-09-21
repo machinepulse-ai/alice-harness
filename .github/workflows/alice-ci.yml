@@ -128,8 +128,16 @@ jobs:
           bash scripts/prepare-ci-bubblewrap.sh &
           sandbox_pid=$!
           wait "$install_pid" && wait "$sandbox_pid"
-      - name: Build, then replay the recorded sessions through the shipped profiles
-        run: pnpm run check:ci:snapshot
+      - name: Build
+        run: pnpm run build
+      # Only the runtime's recorded sessions (acp, sdk, session) and the corpus
+      # check: the Web client's snapshots under apps/web/tests need Chromium
+      # and this fork ships no Web client.
+      - name: Replay the recorded sessions through the shipped profiles
+        env:
+          DSH_EXAMPLE_MODE: lib
+          DSH_SNAPSHOT: replay
+        run: pnpm exec vitest run --config vitest.snapshot.config.ts snapshots/ scripts/session-snapshot-corpus.corpus.ts
 
   runtime:
     name: runtime build

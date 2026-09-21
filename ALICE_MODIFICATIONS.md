@@ -29,8 +29,10 @@ express does.
 - **What** — `.github/workflows/alice-ci.yml` runs on every pull request with
   four checks and one aggregate: typecheck + lint + documentation gates, the
   unit suite (`vitest run`, 20 s per test, no per-file 100% coverage bar),
-  the recorded-session snapshot replay (`check:ci:snapshot` = build + replay
-  through the shipped profiles), and the linux-x64 single-executable build
+  the recorded-session snapshot replay (build, then `vitest run --config
+  vitest.snapshot.config.ts snapshots/` — the runtime's acp, sdk and session
+  recordings; the Web client's snapshots under `apps/web/tests` need Chromium and
+  are left out), and the linux-x64 single-executable build
   (`build-exe-for-python-sdk.yml`, the same pipeline alice-ultra's release
   uses). The unit lane sets `DSH_TEST_SKIP_USER_SYSTEMD=1`, a switch added to
   `vitest.config.ts` that excludes the six Linux process-containment suites:

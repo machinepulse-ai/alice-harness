@@ -206,7 +206,8 @@ jobs:
       DSH_NODE_COMPAT_SKIP_TYPECHECK: '1'
       DSH_OXLINT_THREADS: '4'
       DSH_PUBLINT_CONCURRENCY: '4'
-      DSH_WEB_SNAPSHOT_WORKERS: '2'
+      # No Web client ships from this fork: the browser snapshot lane is off.
+      DSH_CI_SKIP_WEB_SNAPSHOT: '1'
       # A failing gate aborts its running siblings: a failing build stops the
       # independent Node compatibility smoke, and a failing reader (e.g.
       # publint) stops the remaining artifact consumers.
@@ -275,9 +276,6 @@ jobs:
           wait "$sandbox_pid" || sandbox_status=$?
           if (( install_status != 0 )); then exit "$install_status"; fi
           exit "$sandbox_status"
-
-      - name: Install Playwright Chromium and hosted dependencies
-        run: pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps chromium
 
       - name: Run compatibility, snapshot, and artifact gates
         run: pnpm run check:ci:consumers

@@ -41,6 +41,10 @@ express does.
   its bootstrap never runs, even after `loginctl enable-linger` made
   `systemd-run --user --scope` succeed. Those suites still run on developer
   machines and upstream.
+  The snapshot lane sets `DSH_CI_SKIP_WEB_SNAPSHOT=1`, a new switch in
+  `scripts/run-gates.ts` that omits the Playwright web-browser snapshot gate:
+  this fork ships no Web client, and that gate was the slowest (10 min) and the
+  one that flaked on the hosted runner.
   The spec files that described the old lane set follow
   (`scripts/ci-workflow.spec.ts`, `scripts/ci-compatible-selfhosted.spec.ts`,
   `scripts/tests/ci-master-platforms.spec.ts`).

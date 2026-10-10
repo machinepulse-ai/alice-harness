@@ -91,3 +91,19 @@ express does.
 - **Upstreamable** — yes: a pure addition to the bridge. The one behavior upstream
   may not want is that a model attempt failing after it streamed leaves its partial
   text on the wire; ACP has no update that retracts delivered text.
+
+## Named credentials survive the child-environment scrub
+
+- **What** — `scrubbedParentEnv()` in `packages/subprocess/subprocess` keeps a
+  credential-shaped parent variable when its name is listed in the
+  comma-separated `DSH_ENV_PASSTHROUGH`. The `DSH_*` scrub is unchanged, so the
+  list never reaches a child. The alice-agent daemon sets it to the names it
+  injected for the task, minus the harness's own gateway key.
+- **Why** — the scrub drops every name matching `KEY|PASSWORD|SECRET|TOKEN`,
+  so `ALICE_TASK_HELPER_SECRET`, `ALICE_TOKEN`, `ALICE_TASK_TOKEN` and
+  agent-configured `*_TOKEN`/`*_KEY` never reached the bash tool or MCP
+  servers; `alice-agent lark-token` failed in every harness task. A profile
+  patch cannot express an allowlist.
+- **Upstreamable** — maybe, as a validated config field instead of an
+  environment variable. Re-applying after a sync is the one loop in
+  `scrubbedParentEnv()` plus its test case in `tests/service.spec.ts`.

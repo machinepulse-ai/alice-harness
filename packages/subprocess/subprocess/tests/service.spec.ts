@@ -96,4 +96,23 @@ describe('SubprocessRuntime seam', () => {
       delete process.env.SCRUB_PROBE_PLAIN
     }
   })
+
+  it('scrubbedParentEnv keeps credential-shaped names listed in DSH_ENV_PASSTHROUGH', () => {
+    process.env.DSH_ENV_PASSTHROUGH = 'SCRUB_PROBE_HELPER_SECRET,SCRUB_PROBE_TOKEN'
+    process.env.SCRUB_PROBE_HELPER_SECRET = 'listed'
+    process.env.SCRUB_PROBE_TOKEN = 'listed'
+    process.env.SCRUB_PROBE_OTHER_SECRET = 'unlisted'
+    try {
+      const env = scrubbedParentEnv()
+      expect(env.SCRUB_PROBE_HELPER_SECRET).toBe('listed')
+      expect(env.SCRUB_PROBE_TOKEN).toBe('listed')
+      expect(env.SCRUB_PROBE_OTHER_SECRET).toBeUndefined()
+      expect(env.DSH_ENV_PASSTHROUGH).toBeUndefined()
+    } finally {
+      delete process.env.DSH_ENV_PASSTHROUGH
+      delete process.env.SCRUB_PROBE_HELPER_SECRET
+      delete process.env.SCRUB_PROBE_TOKEN
+      delete process.env.SCRUB_PROBE_OTHER_SECRET
+    }
+  })
 })

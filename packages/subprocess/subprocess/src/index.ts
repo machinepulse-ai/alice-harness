@@ -45,6 +45,16 @@ export type {
 export const SENSITIVE_ENV_PATTERN = /KEY|PASSWORD|SECRET|TOKEN/i
 
 /**
+ * Alice: comma-separated parent environment names exempt from
+ * {@link SENSITIVE_ENV_PATTERN}. The host that launches the harness lists the
+ * credentials it injected for the task's tools on purpose (the alice-agent
+ * daemon's `ALICE_*` and agent-configured secrets), so they reach the bash
+ * tool and MCP servers. The `DSH_*` scrub still applies, which also keeps this
+ * list itself out of every child.
+ */
+const ENV_PASSTHROUGH = 'DSH_ENV_PASSTHROUGH'
+
+/**
  * The ambient parent environment minus credential-shaped names and minus all
  * `DSH_*` names — the canonical base every harness child starts from. `PATH`,
  * `HOME`, locale, and proxy variables survive, so child CLIs run normally;
@@ -63,8 +73,11 @@ export const SENSITIVE_ENV_PATTERN = /KEY|PASSWORD|SECRET|TOKEN/i
  */
 export function scrubbedParentEnv(): Record<string, string> {
   const env: Record<string, string> = {}
+  const passthrough = new Set((process.env[ENV_PASSTHROUGH] ?? '').split(','))
   for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined && !SENSITIVE_ENV_PATTERN.test(key) && !key.toUpperCase().startsWith(DSH_ENV_PREFIX)) env[key] = value
+    if (value === undefined || key.toUpperCase().startsWith(DSH_ENV_PREFIX)) continue
+    if (SENSITIVE_ENV_PATTERN.test(key) && !passthrough.has(key)) continue
+    env[key] = value
   }
   // A child Node ignores the inherited proxy variables unless the flag this adds is set, so an MCP
   // stdio server or subagent CLI would connect directly while its parent proxies. The same overlay

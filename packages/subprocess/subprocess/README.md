@@ -70,7 +70,7 @@ For interactive programs, `spawnTerminal` allocates a real PTY: write text, read
 
 ### Environment every child starts from
 
-Children never inherit the harness's ambient secrets: credential-shaped names and ambient `DSH_*` facts are scrubbed, and the caller's explicit `env` merges after that scrub. A deliberately forwarded credential or a current `DSH_*` deployment fact still reaches the child; an explicit `undefined` tombstone removes an ordinary ambient entry.
+Children never inherit the harness's ambient secrets: credential-shaped names and ambient `DSH_*` facts are scrubbed, and the caller's explicit `env` merges after that scrub. A deliberately forwarded credential or a current `DSH_*` deployment fact still reaches the child; an explicit `undefined` tombstone removes an ordinary ambient entry. Alice fork: a credential-shaped name listed in the comma-separated `DSH_ENV_PASSTHROUGH` parent variable is kept, so a launching host can hand the credentials it injected for tools to every child; the list itself is a `DSH_*` name and never reaches a child.
 
 ### What can go wrong
 

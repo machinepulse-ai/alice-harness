@@ -107,3 +107,23 @@ express does.
 - **Upstreamable** — maybe, as a validated config field instead of an
   environment variable. Re-applying after a sync is the one loop in
   `scrubbedParentEnv()` plus its test case in `tests/service.spec.ts`.
+
+## A gateway-relayed stream cut is a retryable transport failure
+
+- **What** — `classifyPiAiError()` in `packages/llm/llm-pi-ai/src/stream.ts`
+  maps `… stream was interrupted` and `… HTTP/2 stream failed` to `TRANSPORT`.
+  `packages/llm/llm-retry/tests/pi-ai-gateway-recovery.spec.ts` replays the cut
+  through the real pi-ai OpenAI-completions adapter, the agent loop and
+  `llm-retry`.
+- **Why** — the MachinePulse gateway (new-api) reports an upstream stream cut
+  as an in-band `error` chunk (`Upstream response stream was interrupted`,
+  `Upstream HTTP/2 stream failed`). Neither wording matched a transport pattern,
+  so it fell through to the non-retryable `PI_AI_ERROR` and failed the whole
+  turn, although the default retry policy already retries `TRANSPORT`. The
+  failed attempt never commits an assistant message, so none of its tool calls
+  has run when the request is retried. A profile patch cannot change error
+  classification.
+- **Upstreamable** — yes, as two more gateway wordings beside the existing
+  transport patterns. Re-applying after a sync is the one `if` in
+  `classifyPiAiError()` plus the spec and its `dsh-llm-pi-ai` devDependency in
+  `packages/llm/llm-retry/package.json`.

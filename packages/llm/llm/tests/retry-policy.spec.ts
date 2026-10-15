@@ -14,6 +14,7 @@ describe('provider retry policy', () => {
       mode: 'normal',
       maxRetries: 5,
       retryableCodes: ['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT'],
+      recoveryMessages: {},
       initialDelayMs: 500,
       maxDelayMs: 10_000,
       jitterRatio: 0.1,
@@ -43,10 +44,20 @@ describe('provider retry policy', () => {
       mode: 'normal',
       maxRetries: 4,
       retryableCodes: ['BUSY'],
+      recoveryMessages: {},
       initialDelayMs: 25,
       maxDelayMs: 100,
       jitterRatio: 0,
     })
+  })
+
+  it('detaches recovery messages and ties each to a retryable code', () => {
+    const recoveryMessages = { BUSY: 'try again' }
+    const policy = resolveRetryPolicy({ mode: 'normal', retryableCodes: ['BUSY'], recoveryMessages }, 'provider.retryPolicy')
+    recoveryMessages.BUSY = 'changed'
+
+    expect(policy).toMatchObject({ recoveryMessages: { BUSY: 'try again' } })
+    expect(Object.isFrozen(policy.mode === 'normal' ? policy.recoveryMessages : undefined)).toBe(true)
   })
 
   it('resolves always mode with default backoff', () => {
@@ -88,6 +99,8 @@ describe('provider retry policy', () => {
     [{ mode: 'normal', retryableCodes: ['SERVER', 'SERVER'] }, /duplicates/],
     [{ mode: 'normal', retryableCodes: [''] }, /non-empty strings/],
     [{ mode: 'normal', retryableCodes: [429] }, /non-empty strings/],
+    [{ mode: 'normal', retryableCodes: ['SERVER'], recoveryMessages: { TIMEOUT: 'again' } }, /recoveryMessages\.TIMEOUT names a code outside retryableCodes/],
+    [{ mode: 'normal', recoveryMessages: { SERVER: '' } }, /recoveryMessages\.SERVER must be a non-empty string/],
     [{ mode: 'normal', maxRetires: 1 }, /unknown key "maxRetires"/],
     [{ mode: 'always', backoff: { initialDelay: 1 } }, /unknown key "initialDelay"/],
     [{ mode: 'sometimes' }, /mode must be "normal" or "always"/],

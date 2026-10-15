@@ -108,6 +108,38 @@ express does.
   environment variable. Re-applying after a sync is the one loop in
   `scrubbedParentEnv()` plus its test case in `tests/service.spec.ts`.
 
+## A tool call the provider could not parse is retried with a correction
+
+- **What** — `classifyPiAiError()` in `packages/llm/llm-pi-ai/src/stream.ts`
+  maps `… MALFORMED_FUNCTION_CALL` / `MALFORMED_RESPONSE` to the new
+  `MALFORMED_TOOL_CALL` code and `Provider finish_reason: content_filter` to
+  `CONTENT_FILTER` (both constants in `packages/llm/llm/src/error.ts`), and
+  `mapStopReason()` words those two failures with the model name instead of
+  pi-ai's bare `Provider finish_reason: …`. A normal-mode `retryPolicy` takes
+  `recoveryMessages` (`packages/llm/llm/src/retry-policy.ts`), a text per
+  retryable code; `dsh-llm-retry` appends it to the session as a user message
+  (source `plugin`, form `notice`) right before that code's retry, so the
+  rebuilt request carries it. `pi-ai-gateway-recovery.spec.ts` replays a
+  `content_filter` finish through the real adapter, the loop and the plugin.
+- **Why** — Gemini 3.x through the MachinePulse gateway regularly ends a step
+  with `MALFORMED_FUNCTION_CALL` (the model writes the call as text,
+  `call:default_api:bash{command:…}`), which the gateway's new-api build folds
+  into `content_filter`. The text fell through to `PI_AI_ERROR` and failed the
+  turn with `Internal error (-32603)`: about a third of autoroute tasks on
+  `gemini-3.8-flash-high` and `gemini-3.5-flash-lite` in the week of
+  2026-10-08. The same context fails the same way on a verbatim retry, while a
+  one-line correction appended before the retry recovered 24/24 reproductions,
+  so the retry needs a model-visible message — which the plugin forbade and a
+  profile patch cannot add. The codes and the correction are configuration,
+  so Alice's patch opts the gateway route in and other routes keep today's
+  behavior.
+- **Upstreamable** — yes: the codes are provider-neutral, the field is
+  opt-in and validated, and the one model-visible input is logged like every
+  other. Re-applying after a sync is the two `if`s in `classifyPiAiError()`,
+  `describeDiscardedStep()`, the `recoveryMessages` field and its checks in
+  `retry-policy.ts`, the append in `dsh-llm-retry`'s `backoff()`, the two
+  constants, and the three specs.
+
 ## A gateway-relayed stream cut is a retryable transport failure
 
 - **What** — `classifyPiAiError()` in `packages/llm/llm-pi-ai/src/stream.ts`

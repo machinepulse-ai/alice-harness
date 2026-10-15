@@ -10,6 +10,7 @@ import type { Context, Events } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
 import type { Agent, RequestErrorAction } from '@deepseek-ai/dsh-agent'
+import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { LlmFailure, ResolvedRetryPolicy } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import { RetryId } from './brand.ts'
@@ -188,6 +189,21 @@ export function apply(ctx: Context, config: Config = {}, internals: RetryInterna
     agent.session.append('llm/retry', eventData)
     if (!await cancellableDelay(delayMs, fusedSignal)) return
     agent.session.append('llm/retry-started', { retryId, turn, step, retry })
+    // The one model-visible part of a retry: a policy-configured correction,
+    // logged as a user message so the retried step rebuilds its request with
+    // it (the loop derives every attempt's messages from the durable history).
+    const correction = policy.mode === 'normal' ? policy.recoveryMessages[failure.code] : undefined
+    if (correction !== undefined) {
+      agent.session.append('user/message', createUserMessage({
+        content: [{ type: 'text', text: correction }],
+        source: {
+          kind: 'plugin',
+          plugin: name,
+          form: 'notice',
+          summary: boundContextSummary(`retry ${retry} after ${failure.code}: correction sent to the model`),
+        },
+      }), { surfaceOp: 'append' })
+    }
     return { kind: 'retry' }
   }
 

@@ -9,7 +9,7 @@
  */
 
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, isContextWindowExceededError, isQuotaExceededError, LlmError, QUOTA_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm'
+import { CONTENT_FILTER_CODE, CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, isContextWindowExceededError, isQuotaExceededError, LlmError, MALFORMED_TOOL_CALL_CODE, QUOTA_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm'
 import type { FinishReason, StreamChunk, TokenUsage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { isContextOverflow } from '@earendil-works/pi-ai'
 import type { AssistantMessage, AssistantMessageEvent, Usage as PiUsage } from '@earendil-works/pi-ai'
@@ -40,6 +40,16 @@ export function mapUsage(usage: PiUsage): TokenUsage {
 // If pi-ai ever forwards the original Error (or a fetch/dispatcher hook that lets
 // us capture the cause ourselves), classify on `code`/`cause` instead of text.
 function classifyPiAiError(message: string): string {
+  // pi-ai renders a finish reason it does not know as `Provider finish_reason:
+  // <reason>` (its Google adapter: `Provider stopped with: <reason>`). Two of
+  // them end a step with nothing a caller can act on although the connection
+  // was fine: Gemini's MALFORMED_FUNCTION_CALL (the model's tool call could not
+  // be parsed; relayed verbatim or as `function_call_filter: …`), and
+  // content_filter, which a gateway that folds every non-stop Gemini reason
+  // together reports for that same malformed call. Each gets its own code so a
+  // provider policy can route it.
+  if (/\bMALFORMED_(?:FUNCTION_CALL|RESPONSE)\b/.test(message)) return MALFORMED_TOOL_CALL_CODE
+  if (/\bProvider (?:finish_reason|stopped with): content_filter\b/.test(message)) return CONTENT_FILTER_CODE
   if (/\b(?:401|403)\b/.test(message)) return 'AUTH'
   if (isQuotaExceededError(message)) return QUOTA_EXCEEDED_CODE
   if (/\b429\b|rate.?limit/i.test(message)) return 'RATE_LIMIT'
@@ -72,6 +82,26 @@ function classifyPiAiError(message: string): string {
 }
 
 /**
+ * Name the model and what the provider did for a step it discarded. Other
+ * codes keep pi-ai's text, which already carries the status or socket detail
+ * the policy and the user need.
+ * @param code - the classified failure code.
+ * @param text - pi-ai's error text.
+ * @param model - the model that produced the discarded step.
+ * @returns the readable failure message, or `undefined` to keep `text`.
+ */
+function describeDiscardedStep(code: string, text: string, model: string): string | undefined {
+  switch (code) {
+    case MALFORMED_TOOL_CALL_CODE:
+      return `model "${model}" produced a tool call the provider could not parse (${text}); the step's output was discarded`
+    case CONTENT_FILTER_CODE:
+      return `model "${model}" stopped with finish_reason content_filter: the provider discarded the step's output (its content policy, or, through a gateway that folds Gemini finish reasons, a tool call it could not parse)`
+    default:
+      return undefined
+  }
+}
+
+/**
  * Map a terminal pi-ai event to the harness finish reason.
  * @param message - the assistant message carried by the `done` or `error` event.
  * @param contextWindow - resolved catalog capacity for usage-based overflow detection.
@@ -79,7 +109,8 @@ function classifyPiAiError(message: string): string {
  *   `contextWindow`, and zero-output `length` usage that fills the window map
  *   to `CONTEXT_WINDOW_EXCEEDED`; a `stop` with no content blocks maps to an
  *   `EMPTY_RESPONSE` error, while terminal `pending` and `deferred` states map
- *   to non-retryable `PI_AI_ERROR` failures.
+ *   to non-retryable `PI_AI_ERROR` failures. A step the provider discarded
+ *   (`MALFORMED_TOOL_CALL`, `CONTENT_FILTER`) carries a message naming the model.
  */
 export function mapStopReason(message: AssistantMessage, contextWindow?: number): FinishReason {
   const piAiOverflow = isContextOverflow(message, contextWindow)
@@ -126,7 +157,8 @@ export function mapStopReason(message: AssistantMessage, contextWindow?: number)
     }
     case 'error': {
       const text = message.errorMessage ?? 'pi-ai stream error'
-      return { kind: 'error', failure: { message: text, code: classifyPiAiError(text) } }
+      const code = classifyPiAiError(text)
+      return { kind: 'error', failure: { message: describeDiscardedStep(code, text, message.model) ?? text, code } }
     }
   }
 }

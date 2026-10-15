@@ -47,7 +47,7 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-llm-retry'
 ```
 
-省略 `retryPolicy` 时使用 normal mode：对 `EMPTY_RESPONSE`、`RATE_LIMIT`、`SERVER`、`TIMEOUT` 与 `TRANSPORT` 最多重试五次，退避从 500 毫秒到 10 秒、带 10% 抖动。normal mode 可以更改其有界预算、合格 code 与退避；always mode 先询问下游恢复，然后无尝试上限地重试每个模型请求失败，只在成功、取消或插件释放时停止。
+省略 `retryPolicy` 时使用 normal mode：对 `EMPTY_RESPONSE`、`RATE_LIMIT`、`SERVER`、`TIMEOUT` 与 `TRANSPORT` 最多重试五次，退避从 500 毫秒到 10 秒、带 10% 抖动。normal mode 可以更改其有界预算、合格 code 与退避；always mode 先询问下游恢复，然后无尝试上限地重试每个模型请求失败，只在成功、取消或插件释放时停止。normal mode 还可以在 `recoveryMessages` 下为每个合格 code 指定一条纠正文本（`MALFORMED_TOOL_CALL: 'Your last tool call arrived as text and did not run; issue it again through function calling.'`）：该文本会在该 code 的重试开始前作为用户消息追加进会话，用于原样重试往往会重现的失败，例如提供方无法解析的工具调用。键不在 `retryableCodes` 内或文本为空会使配置失败。
 
 ### 你可以观察到什么
 
@@ -55,7 +55,7 @@ kind: "package-reference"
 
 ### 失败与恢复
 
-在任何最终适配器被选中之前发生的失败没有提供方策略，原样委派下游。normal mode 中，不在合格集合内的失败 code 或已耗尽的预算会委派；always mode 中，超上限的提供方延迟使用配置的本地退避，因此策略不会因该指令终止。这里没有任何模型可见内容：重试事件、延迟、提供方错误或失败的部分输出都不会到达模型或派生消息。
+在任何最终适配器被选中之前发生的失败没有提供方策略，原样委派下游。normal mode 中，不在合格集合内的失败 code 或已耗尽的预算会委派；always mode 中，超上限的提供方延迟使用配置的本地退避，因此策略不会因该指令终止。重试事件、延迟、提供方错误或失败的部分输出都不会到达模型或派生消息；重试中唯一模型可见的部分是配置的 `recoveryMessages` 纠正文本，它在重建重试请求前以带 `plugin` 来源的 `user/message` 事件记入日志。
 
 -----
 
@@ -112,7 +112,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-重试事件、延迟、提供方错误或失败的部分输出都不会对模型可见。除非下游恢复策略刻意改变表面，重试步骤从持久表面历史重建同一显式提供方／模型请求；失败分片绝不进入派生消息。
+重试事件、延迟、提供方错误或失败的部分输出都不会对模型可见。除非下游恢复策略刻意改变表面，或策略的 `recoveryMessages` 把纠正文本追加为最后一条用户消息，重试步骤从持久表面历史重建同一显式提供方／模型请求；失败分片绝不进入派生消息。
 
 #### Token 影响
 

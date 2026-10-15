@@ -47,6 +47,25 @@ export const EMPTY_RESPONSE_CODE = 'EMPTY_RESPONSE'
  */
 export const INVALID_CREDENTIAL_CODE = 'INVALID_CREDENTIAL'
 
+/**
+ * Canonical provider-neutral code for a step the provider discarded because
+ * the model's tool call could not be parsed: Gemini's
+ * `MALFORMED_FUNCTION_CALL`, relayed verbatim by a native adapter or as
+ * `function_call_filter: MALFORMED_FUNCTION_CALL` by an OpenAI-compatible
+ * gateway. The attempt committed nothing, so a policy may retry it; the same
+ * context tends to fail the same way, so the policy's `recoveryMessages`
+ * is what turns the retry into a recovery.
+ */
+export const MALFORMED_TOOL_CALL_CODE = 'MALFORMED_TOOL_CALL'
+
+/**
+ * Canonical provider-neutral code for a step the provider withheld under its
+ * content policy (`finish_reason: content_filter`). A gateway that folds every
+ * non-stop Gemini finish reason into this one reports an unparseable tool
+ * call the same way, which is why a policy may choose to retry it.
+ */
+export const CONTENT_FILTER_CODE = 'CONTENT_FILTER'
+
 /** Structured codes and plain phrases that explicitly name a context bound being exceeded. */
 const STRUCTURED_CONTEXT_OVERFLOW = new RegExp(
   String.raw`(?:^|[^a-z0-9])context[\s_-](?:length|window)[\s_-]`

@@ -883,6 +883,29 @@ describe('mapStopReason / mapUsage', () => {
       .toEqual({ kind: 'error', failure: { message: 'pi-ai stream error', code: 'PI_AI_ERROR' } })
   })
 
+  it('names the model for a step the provider discarded', () => {
+    expect(mapStopReason(assistant({ stopReason: 'error', errorMessage: 'Provider finish_reason: content_filter' })))
+      .toEqual({
+        kind: 'error',
+        failure: {
+          message: 'model "deepseek-v4-flash" stopped with finish_reason content_filter: the provider discarded the step\'s output (its content policy, or, through a gateway that folds Gemini finish reasons, a tool call it could not parse)',
+          code: 'CONTENT_FILTER',
+        },
+      })
+    expect(mapStopReason(assistant({
+      stopReason: 'error',
+      errorMessage: 'Provider finish_reason: function_call_filter: MALFORMED_FUNCTION_CALL',
+    }))).toEqual({
+      kind: 'error',
+      failure: {
+        message: 'model "deepseek-v4-flash" produced a tool call the provider could not parse (Provider finish_reason: function_call_filter: MALFORMED_FUNCTION_CALL); the step\'s output was discarded',
+        code: 'MALFORMED_TOOL_CALL',
+      },
+    })
+    expect(mapStopReason(assistant({ stopReason: 'error', errorMessage: 'Provider stopped with: MALFORMED_FUNCTION_CALL' })))
+      .toMatchObject({ kind: 'error', failure: { code: 'MALFORMED_TOOL_CALL' } })
+  })
+
   it('maps routable HTTP-ish error messages to stable codes', () => {
     expect(mapStopReason(assistant({ stopReason: 'error', errorMessage: 'HTTP 401: bad key' })))
       .toMatchObject({ kind: 'error', failure: { code: 'AUTH' } })

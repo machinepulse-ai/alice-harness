@@ -41,6 +41,13 @@ export interface NormalRetryPolicyConfig {
   maxRetries?: number
   /** Stable failure codes eligible for this policy. */
   retryableCodes?: string[]
+  /**
+   * Model-visible correction per failure code: appended to the durable
+   * history as a user message right before the retry of a failure carrying
+   * that code, for failures a verbatim repeat tends to reproduce (a tool call
+   * the provider could not parse). Every key must also be in `retryableCodes`.
+   */
+  recoveryMessages?: Record<string, string>
   /** Local exponential-backoff and jitter configuration. */
   backoff?: BackoffConfig
 }
@@ -68,6 +75,7 @@ export interface ResolvedNormalRetryPolicy extends ResolvedRetryBackoff {
   readonly mode: 'normal'
   readonly maxRetries: number
   readonly retryableCodes: readonly string[]
+  readonly recoveryMessages: Readonly<Record<string, string>>
 }
 
 /** Fully resolved unbounded retry policy. */
@@ -88,6 +96,7 @@ const normalPolicySchema: z<NormalRetryPolicyConfig> = z.object({
   mode: z.const('normal').required(),
   maxRetries: z.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_MAX_RETRIES),
   retryableCodes: z.array(z.string()).default([...DEFAULT_RETRYABLE_CODES]),
+  recoveryMessages: z.dict(z.string()).default({}),
   backoff: backoffSchema,
 })
 
@@ -103,13 +112,14 @@ export const RetryPolicySchema: z<RetryPolicyConfig> = z.union([
 ])
 
 const NORMAL_POLICY_KEYS: ReadonlySet<string> = new Set([
-  'mode', 'maxRetries', 'retryableCodes', 'backoff',
+  'mode', 'maxRetries', 'retryableCodes', 'recoveryMessages', 'backoff',
 ])
 // Layered configuration can retain normal-only fields after switching modes;
 // always mode ignores those inactive values while still rejecting unknown keys.
 const ALWAYS_POLICY_KEYS: ReadonlySet<string> = new Set([
-  'mode', 'maxRetries', 'retryableCodes', 'backoff',
+  'mode', 'maxRetries', 'retryableCodes', 'recoveryMessages', 'backoff',
 ])
+const EMPTY_RECOVERY_MESSAGES: Readonly<Record<string, string>> = Object.freeze({})
 const BACKOFF_KEYS: ReadonlySet<string> = new Set(['initialDelayMs', 'maxDelayMs', 'jitterRatio'])
 
 function validateKeys(value: object, allowed: ReadonlySet<string>, path: string): void {
@@ -155,6 +165,7 @@ export function resolveRetryPolicy(
       mode: 'normal',
       maxRetries: DEFAULT_MAX_RETRIES,
       retryableCodes: DEFAULT_RETRYABLE_CODES,
+      recoveryMessages: EMPTY_RECOVERY_MESSAGES,
       ...resolveBackoff(undefined, `${path}.backoff`),
     })
   }
@@ -176,10 +187,20 @@ export function resolveRetryPolicy(
       if (new Set(retryableCodes).size !== retryableCodes.length) {
         throw new Error(`${path}.retryableCodes must not contain duplicates`)
       }
+      const recoveryMessages = config.recoveryMessages ?? EMPTY_RECOVERY_MESSAGES
+      for (const [code, text] of Object.entries(recoveryMessages)) {
+        if (!retryableCodes.includes(code)) {
+          throw new Error(`${path}.recoveryMessages.${code} names a code outside retryableCodes`)
+        }
+        if (typeof text !== 'string' || text.length === 0) {
+          throw new Error(`${path}.recoveryMessages.${code} must be a non-empty string`)
+        }
+      }
       return Object.freeze({
         mode: 'normal',
         maxRetries,
         retryableCodes: Object.freeze([...retryableCodes]),
+        recoveryMessages: Object.freeze({ ...recoveryMessages }),
         ...resolveBackoff(config.backoff, `${path}.backoff`),
       })
     }

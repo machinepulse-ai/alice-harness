@@ -504,7 +504,7 @@ describe('automation-only ACP bridge', () => {
       await expect(harness.client.prompt({
         sessionId: created.sessionId,
         prompt: [{ type: 'text', text: 'second' }],
-      })).resolves.toEqual({ stopReason: 'end_turn' })
+      })).resolves.toMatchObject({ stopReason: 'end_turn' })
     } finally {
       await harness?.dispose()
       harness = undefined
@@ -567,7 +567,7 @@ describe('automation-only ACP bridge', () => {
       await expect(harness.client.prompt({
         sessionId: created.sessionId,
         prompt: [{ type: 'text', text: 'continue while discovery is pending' }],
-      })).resolves.toEqual({ stopReason: 'end_turn' })
+      })).resolves.toMatchObject({ stopReason: 'end_turn' })
       await expect(harness.client.closeSession({ sessionId: created.sessionId })).resolves.toEqual({})
     } finally {
       blocked.resolve([])
@@ -697,7 +697,7 @@ describe('automation-only ACP bridge', () => {
       value: plain.value,
     })
     releaseValidation.resolve(undefined)
-    await expect(prompt).resolves.toEqual({ stopReason: 'end_turn' })
+    await expect(prompt).resolves.toMatchObject({ stopReason: 'end_turn' })
 
     expect(harness.adapter.requests[0]).toMatchObject({ provider: 'mock', model: 'mock' })
     harness.attachments!.beforeValidate = undefined
@@ -854,7 +854,7 @@ describe('automation-only ACP bridge', () => {
     await expect(harness.client.prompt({
       sessionId: created.sessionId,
       prompt: [{ type: 'text', text: 'route me' }],
-    })).resolves.toEqual({ stopReason: 'end_turn' })
+    })).resolves.toMatchObject({ stopReason: 'end_turn' })
     expect(harness.adapter.requests[0]).toMatchObject({ provider: 'mock', model: 'mock' })
   })
 
@@ -923,7 +923,7 @@ describe('automation-only ACP bridge', () => {
     expect(harness.attachments?.saved).toEqual([])
 
     await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'retry' }] }))
-      .resolves.toEqual({ stopReason: 'end_turn' })
+      .resolves.toMatchObject({ stopReason: 'end_turn' })
   })
 
   it('reports durable image write failures as internal prompt failures', async () => {

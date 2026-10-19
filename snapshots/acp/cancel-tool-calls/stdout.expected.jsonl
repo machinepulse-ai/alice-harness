@@ -4,4 +4,4 @@
 {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"tool_call_update","toolCallId":"call_wait","status":"failed","content":[{"type":"content","content":{"type":"text","text":"Error: tool call aborted"}}]}}}
 {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"tool_call","toolCallId":"call_skipped","title":"bash","kind":"other","status":"in_progress","rawInput":{"command":"printf skipped > skipped.txt","description":"Write skipped marker"}}}}
 {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"tool_call_update","toolCallId":"call_skipped","status":"failed","content":[{"type":"content","content":{"type":"text","text":"Error: tool call aborted before dispatch"}}]}}}
-{"jsonrpc":"2.0","id":3,"result":{"stopReason":"cancelled"}}
+{"jsonrpc":"2.0","id":3,"result":{"stopReason":"cancelled","usage":{"inputTokens":10,"outputTokens":10,"cachedReadTokens":0,"cachedWriteTokens":0,"totalTokens":20}}}

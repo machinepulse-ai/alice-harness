@@ -13,6 +13,7 @@ import {
 import type { Agent, AgentHandle, AgentOptions, AssistantStreamFrame, ModelSelection } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, errorChain, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { type Session, type SessionEvent, type SessionId, type TurnEndReason } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-token-meter'
 import { AcpContentError, admitAcpPrompt } from './content.ts'
 import { turnEndToStopReason } from './codec.ts'
 import { mountAcpMcpServers } from './mcp.ts'
@@ -255,7 +256,7 @@ export class AcpSession {
    * @param params - standard ACP prompt request for this session.
    * @param imageEnabled - connection capability advertised at initialization.
    * @param requestSignal - JSON-RPC request cancellation signal.
-   * @returns the correlated standard stop reason after ordered updates drain.
+   * @returns the stop reason and measured prompt-local usage after ordered updates drain.
    */
   async prompt(
     params: PromptRequest,
@@ -264,11 +265,24 @@ export class AcpSession {
   ): Promise<PromptResponse> {
     this.assertActive()
     if (this.inflight !== undefined) throw invalidParams('a prompt is already in flight for this session')
-    const completion = Promise.withResolvers<StopReason>()
+    const projections = this.ctx.get('sessionProjections')
+    const usageBefore = projections?.stateOf(this.agent.session, 'tokenUsage')?.totals
+    const completion = Promise.withResolvers<PromptResponse>()
+    const response = (stopReason: StopReason): PromptResponse => {
+      const after = projections?.stateOf(this.agent.session, 'tokenUsage')?.totals
+      if (usageBefore === undefined || after === undefined) return { stopReason }
+      const inputTokens = after.uncachedInputTokens - usageBefore.uncachedInputTokens
+      const outputTokens = after.outputTokens - usageBefore.outputTokens
+      const cachedReadTokens = after.cacheReadTokens - usageBefore.cacheReadTokens
+      const cachedWriteTokens = after.cacheWriteTokens - usageBefore.cacheWriteTokens
+      const totalTokens = inputTokens + outputTokens + cachedReadTokens + cachedWriteTokens
+      if (totalTokens === 0) return { stopReason }
+      return { stopReason, usage: { inputTokens, outputTokens, cachedReadTokens, cachedWriteTokens, totalTokens } }
+    }
     const admission = Promise.withResolvers<void>()
     const admissionController = new AbortController()
     const inflight: InflightPrompt = {
-      resolve: completion.resolve,
+      resolve: (reason) => { completion.resolve(response(reason)) },
       reject: completion.reject,
       messageId: undefined,
       messageQueued: false,
@@ -327,7 +341,7 @@ export class AcpSession {
 
       if (inflight.cancelRequested) {
         this.settleAfterQuiescence(inflight)
-        return { stopReason: await completion.promise }
+        return await completion.promise
       }
       if (admissionFailure !== undefined) {
         this.inflight = undefined
@@ -341,7 +355,7 @@ export class AcpSession {
       }
 
       this.settleAfterQuiescence(inflight)
-      return { stopReason: await completion.promise }
+      return await completion.promise
     } finally {
       requestSignal?.removeEventListener('abort', onRequestAbort)
     }

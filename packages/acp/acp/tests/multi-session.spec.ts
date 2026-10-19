@@ -51,7 +51,7 @@ describe('ACP multi-session isolation', () => {
     await harness.client.cancel({ sessionId: a })
     await expect(pendingA).resolves.toEqual({ stopReason: 'cancelled' })
     await expect(harness.client.prompt({ sessionId: b, prompt: [{ type: 'text', text: 'go B' }] }))
-      .resolves.toEqual({ stopReason: 'end_turn' })
+      .resolves.toMatchObject({ stopReason: 'end_turn' })
     await vi.waitFor(() => { expect(messageTextFor(harness!.sessionUpdates, b)).toBe('B done') })
   })
 

@@ -224,6 +224,7 @@ export async function makeBridgeHarness(options: {
   persona?: string
   imageCapable?: boolean
   attachments?: boolean
+  tokenMeter?: boolean
   persistenceRoot?: string
 } = {}): Promise<BridgeHarness> {
   const adapter = new MockAdapter(options.script ?? [], options.imageCapable === true)
@@ -232,7 +233,7 @@ export async function makeBridgeHarness(options: {
   const persistenceRoot = options.persistenceRoot ?? await mkdtemp(join(tmpdir(), 'dsh-acp-test-'))
   await mountAgentLoopTestDependencies(ctx, { systemPrompt: { personaPrefix: options.persona ?? '' } })
   await ctx.plugin(JsonlSessionPersistence, { root: persistenceRoot, compression: 'none' })
-  await ctx.plugin(TokenMeter)
+  if (options.tokenMeter !== false) await ctx.plugin(TokenMeter)
   if (options.attachments !== false) await ctx.plugin(MemoryAttachmentStore)
   const loopFiber = await ctx.plugin(AgentLoop, { agents: [] })
   const primaryAdapter = ctx.llm.registerAdapter(['mock'], adapter)

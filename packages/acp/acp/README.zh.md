@@ -73,6 +73,8 @@ kind: "package-reference"
 | `session/update` | 模型流式生成中的 assistant 文本与 thought、通用工具生命周期、配置变化与上下文用量，按会话串行交付。 |
 | `session/request_permission` | 带一次性允许／拒绝选项的权限提示；你的客户端可以自动回答。 |
 
+`session/prompt` 可通过 `usage` 返回持久 token 用量投影在本次提示词期间的增量，包括未缓存输入、输出、缓存读取和缓存写入。基线在会话创建或恢复后采集，因此不计入历史轮次。推理 token 已包含在输出中。没有测量用量时省略该字段；`usage_update.used/size` 仍表示上下文占用。
+
 会话配置从实时 LLM 服务目录提供不透明的提供方／模型选项，并在确切模型声明推理选项时提供 `reasoning_effort`。提示词会在异步图片准入前快照该选择，并在该轮的每个模型步骤中固定它；并发选项变更从下一轮开始生效。ACP 客户端是受信控制器：stdio MCP 条目授权其绝对命令与环境，HTTP 条目授权其绝对 HTTP(S) URL 与 header；初始连接或发现失败会回滚尚未发布的 Agent。不支持的界面会被省略或拒绝：`session/load`、删除、fork、附加目录、SSE 或 ACP 传输 MCP、mode、命令、计划、终端、客户端文件系统操作与 elicitation。
 
 -----

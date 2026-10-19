@@ -31,6 +31,29 @@ describe('ACP prompt lifecycle', () => {
     harness = undefined
   })
 
+  it('returns disjoint prompt usage without charging a resumed session again', async () => {
+    const response = (inputTokens: number, outputTokens: number, cacheReadTokens: number, cacheWriteTokens: number): StreamChunk[] => textResponse('ok').map(chunk => (
+      chunk.type === 'usage' ? { type: 'usage', usage: { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens } } : chunk
+    ))
+    harness = await makeBridgeHarness({ script: [response(11, 3, 7, 5), response(2, 1, 0, 1), maxTokensResponse('unknown')] })
+    const sessionId = await newSession(harness)
+    expect(await harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'first' }] }))
+      .toEqual({ stopReason: 'end_turn', usage: { inputTokens: 11, outputTokens: 3, cachedReadTokens: 7, cachedWriteTokens: 5, totalTokens: 26 } })
+    await harness.client.closeSession({ sessionId })
+    await harness.client.resumeSession({ sessionId, cwd: process.cwd(), mcpServers: [] })
+    expect(await harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'second' }] }))
+      .toEqual({ stopReason: 'end_turn', usage: { inputTokens: 2, outputTokens: 1, cachedReadTokens: 0, cachedWriteTokens: 1, totalTokens: 4 } })
+    expect(await harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'third' }] }))
+      .toEqual({ stopReason: 'max_tokens' })
+  })
+
+  it('omits token usage when the optional meter is absent', async () => {
+    harness = await makeBridgeHarness({ script: [textResponse('unmetered')], tokenMeter: false })
+    const sessionId = await newSession(harness)
+    expect(await harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] }))
+      .toEqual({ stopReason: 'end_turn' })
+  })
+
   it('reports a max-token turn without losing its committed text', async () => {
     harness = await makeBridgeHarness({ script: [maxTokensResponse('cut off')] })
     const sessionId = await newSession(harness)
@@ -116,7 +139,7 @@ describe('ACP prompt lifecycle', () => {
     await readStarted.promise
     expect(settled).toBe(false)
     delivery.resolve(undefined)
-    await expect(prompt).resolves.toEqual({ stopReason: 'end_turn' })
+    await expect(prompt).resolves.toMatchObject({ stopReason: 'end_turn' })
   })
 
   it('fails prompt delivery when a committed image attachment is missing', async () => {
@@ -179,7 +202,7 @@ describe('ACP prompt lifecycle', () => {
     }, { prepend: true })
     const sessionId = await newSession(harness)
     await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] }))
-      .resolves.toEqual({ stopReason: 'end_turn' })
+      .resolves.toMatchObject({ stopReason: 'end_turn' })
   })
 
   it('correlates the owning prompt when a synchronous injection joins its first step', async () => {
@@ -238,7 +261,7 @@ describe('ACP prompt lifecycle', () => {
     const sessionId = await newSession(harness)
 
     await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'original' }] }))
-      .resolves.toEqual({ stopReason: 'end_turn' })
+      .resolves.toMatchObject({ stopReason: 'end_turn' })
   })
 
   it('frees the prompt slot when the agent rejects the send synchronously', async () => {
@@ -382,7 +405,7 @@ describe('ACP prompt lifecycle', () => {
     await agent.whenIdle()
     releaseValidation.resolve(undefined)
 
-    await expect(prompt).resolves.toEqual({ stopReason: 'end_turn' })
+    await expect(prompt).resolves.toMatchObject({ stopReason: 'end_turn' })
     expect(messageText(harness)).toBe('answer')
   })
 
@@ -458,7 +481,7 @@ describe('ACP prompt lifecycle', () => {
     // A hook or another owner cancels the agent: the ACP client never called
     // session/cancel, so this is ordinary quiescence and reports end_turn.
     agent.cancel({ kind: 'hook', reason: 'owner intervention' })
-    await expect(prompt).resolves.toEqual({ stopReason: 'end_turn' })
+    await expect(prompt).resolves.toMatchObject({ stopReason: 'end_turn' })
   })
 
   it('cancels autonomous running work without an in-flight prompt', async () => {
@@ -485,7 +508,7 @@ describe('ACP prompt lifecycle', () => {
     const sessionId = await newSession(harness)
     await harness.client.cancel({ sessionId })
     await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] }))
-      .resolves.toEqual({ stopReason: 'end_turn' })
+      .resolves.toMatchObject({ stopReason: 'end_turn' })
     await vi.waitFor(() => { expect(messageText(harness!)).toBe('answer') })
   })
 
@@ -498,7 +521,7 @@ describe('ACP prompt lifecycle', () => {
     await expect(first).resolves.toEqual({ stopReason: 'cancelled' })
 
     await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'two' }] }))
-      .resolves.toEqual({ stopReason: 'end_turn' })
+      .resolves.toMatchObject({ stopReason: 'end_turn' })
     // 'partial' is the cancelled turn's finalized prefix update; 'next' proves
     // the second prompt settled independently of the aborted turn's late end.
     await vi.waitFor(() => { expect(messageText(harness!)).toBe('partialnext') })
@@ -539,7 +562,7 @@ describe('ACP prompt lifecycle', () => {
     }))
     const sessionId = await newSession(harness)
     await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] }))
-      .resolves.toEqual({ stopReason: 'end_turn' })
+      .resolves.toMatchObject({ stopReason: 'end_turn' })
     // The rejected prompt closed a blocked turn without streaming anything.
     expect(messageText(harness)).toBe('')
   })

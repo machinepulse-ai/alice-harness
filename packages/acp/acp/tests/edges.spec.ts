@@ -36,7 +36,8 @@ describe('ACP automation output boundary', () => {
     }))
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
-    await harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] })
+    const result = await harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] })
+    expect(result.usage).toEqual({ inputTokens: 13, outputTokens: 6, cachedReadTokens: 0, cachedWriteTokens: 0, totalTokens: 19 })
 
     await vi.waitFor(() => { expect(harness!.updates.at(-1)?.sessionUpdate).toBe('usage_update') })
     // Thought and text arrive as the model emits them; tool lifecycle and
@@ -145,6 +146,6 @@ describe('ACP automation output boundary', () => {
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     harness.onSessionUpdateError = () => {}
     await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] }))
-      .resolves.toEqual({ stopReason: 'end_turn' })
+      .resolves.toMatchObject({ stopReason: 'end_turn' })
   })
 })

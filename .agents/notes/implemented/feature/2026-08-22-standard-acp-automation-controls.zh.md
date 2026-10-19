@@ -54,6 +54,8 @@ Per-session 链会串行处理所有更新，并在提示词完成前 drain。�
 
 `session/cancel` 和 `$/cancel_request` 进入同一个提示词自有取消路径。关联结尾只映射到标准 stop reason 和 JSON-RPC error；模型输出达到上限时报告 `max_tokens`。ACP 不返回额外 DSH 结果结构。
 
+`PromptResponse.usage` 返回持久 token 用量投影在本次提示词期间的增量，包括已测量的重试尝试。基线不包含恢复的历史记录，缺失的测量值保持不可用。输入、输出、缓存读取和缓存写入四个独立类别不会再次累加推理 token。上下文占用仍通过 `usage_update.used/size` 表达，不计为消耗。
+
 ## 考虑过的替代方案
 
 **增加私有控制器扩展。** 已拒绝，因为标准 ACP v1 已经承载所需生命周期、配置、MCP、取消、权限和语义更新概念。私有扩展会使通用 SDK 客户端不完整。

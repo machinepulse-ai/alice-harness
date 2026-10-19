@@ -54,6 +54,8 @@ The per-session chain serializes all updates and drains before prompt completion
 
 `session/cancel` and `$/cancel_request` enter the same prompt-owned cancellation path. Correlated endings map only to standard stop reasons and JSON-RPC errors; a model output limit reports `max_tokens`. ACP returns no additional DSH result structure.
 
+`PromptResponse.usage` reports the durable token-usage projection delta over the prompt interval, including measured retry attempts. Resumed history is outside the baseline; missing measurements remain unavailable. Its disjoint input, output, cache-read, and cache-write buckets do not add reasoning a second time. Context occupancy stays in `usage_update.used/size` and is never counted as consumption.
+
 ## Alternatives considered
 
 **Add a private controller extension.** Rejected because standard ACP v1 already carries the required lifecycle, configuration, MCP, cancellation, permission, and semantic-update concepts. A private extension would make generic SDK clients incomplete.

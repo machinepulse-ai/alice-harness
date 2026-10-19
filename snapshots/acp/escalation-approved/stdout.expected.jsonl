@@ -72,4 +72,4 @@
 {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"."}}}}
 {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"D"}}}}
 {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"ONE"}}}}
-{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn"}}
+{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn","usage":{"inputTokens":1528,"outputTokens":216,"cachedReadTokens":1664,"cachedWriteTokens":0,"totalTokens":3408}}}

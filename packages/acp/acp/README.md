@@ -77,6 +77,8 @@ A prompt remains in flight while managed descendants run, while their results tr
 
 A failure to append `turn/start` or `turn/end` rejects the prompt even when a preceding turn completed.
 
+`session/prompt` returns optional `usage` from the durable token-usage projection: uncached input, output, cache reads, and cache writes accumulated during that prompt. The baseline is captured after session creation or resume, so historical turns are excluded. Reasoning is already part of output. Without measured usage, the field is omitted; `usage_update.used/size` continues to describe context occupancy.
+
 Session configuration offers opaque provider/model choices from the live LLM service catalog and a `reasoning_effort` selector when the exact model declares one. A prompt snapshots that selection before asynchronous image admission and pins it across every model step in that turn; a concurrent option change applies to the next turn. ACP clients are trusted controllers: stdio MCP entries authorize their absolute commands and environment, HTTP entries authorize their absolute HTTP(S) URLs and headers, and any initial connection or discovery failure rolls back the unpublished Agent. Unsupported surfaces are omitted or rejected: `session/load`, deletion, fork, additional directories, SSE or ACP-transport MCP, modes, commands, plans, terminals, client filesystem operations, and elicitation.
 
 -----

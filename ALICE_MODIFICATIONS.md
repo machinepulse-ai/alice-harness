@@ -159,3 +159,21 @@ express does.
   transport patterns. Re-applying after a sync is the one `if` in
   `classifyPiAiError()` plus the spec and its `dsh-llm-pi-ai` devDependency in
   `packages/llm/llm-retry/package.json`.
+
+## A DeepSeek tool call written into the reasoning is a malformed tool call
+
+- **What** — `mapStopReason()` in `packages/llm/llm-pi-ai/src/stream.ts` maps a
+  `stop` whose only content is reasoning carrying DSML markup (`｜DSML｜`) —
+  no text, no tool call — to `MALFORMED_TOOL_CALL` instead of a successful
+  stop. Two specs in `packages/llm/llm-pi-ai/tests/convert.spec.ts`.
+- **Why** — deepseek-flash through the MachinePulse gateway sometimes writes
+  the next tool call as DSML markup inside `reasoning_content` and stops with
+  `finish_reason: stop` and no `tool_calls` (1 in 30 replays of a real Alice
+  step on 2026-11-03). The harness took that as the end of the turn, ACP
+  reported `end_turn`, and Alice recorded a completed task whose only output
+  was the run's opening sentence; over a 20–40 step task this ended most
+  DeepSeek Luma runs halfway. `MALFORMED_TOOL_CALL` is already retried with a
+  correction on the gateway route, so the step is replayed instead.
+- **Upstreamable** — yes: DSML is DeepSeek's own tool-call format. Re-applying
+  after a sync is the `if` in the `stop` branch, `hasToolCallOnlyInThinking()`
+  and the two specs.

@@ -11,7 +11,7 @@ import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
 import type { Agent, RequestErrorAction } from '@deepseek-ai/dsh-agent'
 import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { LlmFailure, ResolvedRetryPolicy } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed, LlmFailure, ResolvedRetryPolicy } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import { RetryId } from './brand.ts'
 import type { LlmRetryEventData } from './types.ts'
@@ -20,6 +20,13 @@ export type { LlmRetryEventData, LlmRetryStartedEventData } from './types.ts'
 export { RetryId } from './brand.ts'
 
 export const name = 'llm-retry'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    /** A retry policy's correction appended before the retried step. */
+    'llm-retry': { kind: 'llm-retry' } & ContextFormed
+  }
+}
 export const inject = ['agents', 'sessionProjections']
 
 /** This policy executor has no config; providers own `retryPolicy`. */
@@ -197,8 +204,7 @@ export function apply(ctx: Context, config: Config = {}, internals: RetryInterna
       agent.session.append('user/message', createUserMessage({
         content: [{ type: 'text', text: correction }],
         source: {
-          kind: 'plugin',
-          plugin: name,
+          kind: 'llm-retry',
           form: 'notice',
           summary: boundContextSummary(`retry ${retry} after ${failure.code}: correction sent to the model`),
         },

@@ -136,10 +136,10 @@ describe('bounded retry through the real pi-ai OpenAI-completions adapter', () =
       message: 'model "gateway-model" stopped with finish_reason content_filter: the provider discarded the step\'s output (its content policy, or, through a gateway that folds Gemini finish reasons, a tool call it could not parse)',
       code: 'CONTENT_FILTER',
     }])
-    const corrections = events.filter((event): event is SessionEvent<'user/message'> => event.type === 'user/message' && event.data.source.kind === 'plugin')
+    const corrections = events.filter((event): event is SessionEvent<'user/message'> => event.type === 'user/message' && event.data.source.kind === 'llm-retry')
     expect(corrections.map(event => event.data)).toMatchObject([{
       content: [{ type: 'text', text: correction }],
-      source: { kind: 'plugin', plugin: 'llm-retry', form: 'notice' },
+      source: { kind: 'llm-retry', form: 'notice' },
     }])
     const messages = events.filter((event): event is SessionEvent<'assistant/message'> => event.type === 'assistant/message')
     expect(messages.map(event => event.data.message.content)).toEqual([[{ type: 'text', text: 'recovered response' }]])

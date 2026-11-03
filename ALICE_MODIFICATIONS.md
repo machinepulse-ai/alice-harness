@@ -5,6 +5,16 @@ configuration lives in a dsh profile patch (`cmd/alice-agent/internal/cli/harnes
 in machinepulse-ai/alice-ultra) and never lands here; only what a patch cannot
 express does.
 
+## Base
+
+- **Upstream tag** — `dsh-v0.2.1-rc.5`; the branch is `alice/dsh-v0.2.1-rc.5`.
+- **Upstream fixes taken ahead of the tag** — cherry-picked with `-x` from
+  upstream `master`, so the next sync on a tag that contains them drops them:
+  `fix(llm-pi-ai): preserve later system reminders in request history`
+  (84a6d2bcaf), `fix(llm-pi-ai): offload old images when a request exceeds the
+  image-count bound` (1abd104891) and `fix(llm-pi-ai): offload count overflow in
+  steps and document the default` (b46adf9f64).
+
 ## The harness identity says Alice Harness
 
 - **What** — the `harness:identity` prompt section, the first line of every
@@ -12,7 +22,7 @@ express does.
   `You are an AI agent powered by Alice Harness.` The sentence is a literal in
   `packages/core/system-prompt/src/index.ts`; every test, snapshot and README
   that quotes it is updated with it, which is the whole diff:
-  `s/powered by Alice Harness/powered by Alice Harness/`.
+  `s/powered by DeepSeek Harness/powered by Alice Harness/`.
 - **Why** — Alice ships this runtime as Alice Harness, and an agent asked what it
   runs on answered DeepSeek, because that is what its own system prompt told it.
   `includeHarnessIdentity: false` would drop the identity slot rather than
@@ -65,16 +75,6 @@ express does.
   `build:native-system`), follow the rename here, and check
   `gh workflow list --all` still shows the upstream set disabled.
 
-## CI's bubblewrap pin follows the current Ubuntu package
-
-- **What** — `scripts/prepare-ci-bubblewrap.sh` pins `bubblewrap_0.9.0-1ubuntu0.3`
-  (sha256 `2461f1be…`) instead of `0.9.0-1ubuntu0.1`.
-- **Why** — archive.ubuntu.com drops a superseded security build; the old pin
-  returns 404, so the coverage and snapshot lanes died in their first step on
-  every hosted run.
-- **Upstreamable** — yes, the same rot hits upstream's hosted lanes. Drop this
-  entry once upstream moves the pin.
-
 ## The ACP bridge streams assistant text and thoughts as the model produces them
 
 - **What** — `packages/acp/acp` subscribes to `agent/assistant-stream` for the
@@ -118,7 +118,8 @@ express does.
   pi-ai's bare `Provider finish_reason: …`. A normal-mode `retryPolicy` takes
   `recoveryMessages` (`packages/llm/llm/src/retry-policy.ts`), a text per
   retryable code; `dsh-llm-retry` appends it to the session as a user message
-  (source `plugin`, form `notice`) right before that code's retry, so the
+  (source `llm-retry`, form `notice`, declared on `MessageSourceMap` the way
+  `model-selection` declares its notice) right before that code's retry, so the
   rebuilt request carries it. `pi-ai-gateway-recovery.spec.ts` replays a
   `content_filter` finish through the real adapter, the loop and the plugin.
 - **Why** — Gemini 3.x through the MachinePulse gateway regularly ends a step
@@ -137,7 +138,8 @@ express does.
   opt-in and validated, and the one model-visible input is logged like every
   other. Re-applying after a sync is the two `if`s in `classifyPiAiError()`,
   `describeDiscardedStep()`, the `recoveryMessages` field and its checks in
-  `retry-policy.ts`, the append in `dsh-llm-retry`'s `backoff()`, the two
+  `retry-policy.ts`, the append in `dsh-llm-retry`'s `backoff()` with its `MessageSourceMap`
+  declaration, the two
   constants, and the three specs.
 
 ## A gateway-relayed stream cut is a retryable transport failure

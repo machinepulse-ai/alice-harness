@@ -13,7 +13,12 @@ express does.
   `fix(llm-pi-ai): preserve later system reminders in request history`
   (84a6d2bcaf), `fix(llm-pi-ai): offload old images when a request exceeds the
   image-count bound` (1abd104891) and `fix(llm-pi-ai): offload count overflow in
-  steps and document the default` (b46adf9f64).
+  steps and document the default` (b46adf9f64), plus `fix(python): deploy the
+  runtime from the workspace lockfile` (a7d0d02146) and `fix(python): preserve
+  deployed dependency validation` (eab19efcf8). Without the last two the
+  single-executable build re-resolves the runtime closure, picks up a
+  dependency newer than the lockfile (tslib 2.9.1 on 2026-11-03) and fails the
+  Office sidecar's lock check, so `scripts/build-harness.sh` cannot package rc.5.
 
 ## The harness identity says Alice Harness
 

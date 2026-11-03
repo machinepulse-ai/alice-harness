@@ -892,6 +892,24 @@ describe('mapStopReason / mapUsage', () => {
       .toEqual({ kind: 'stop' })
   })
 
+  it('classifies a stop whose tool call is DSML markup in the reasoning as MALFORMED_TOOL_CALL', () => {
+    const thinking = 'Let me grep the surrounding HTML for these filenames.</｜｜DSML｜｜ parameter>'
+    expect(mapStopReason(assistant({ stopReason: 'stop', content: [{ type: 'thinking', thinking }] }))).toEqual({
+      kind: 'error',
+      failure: {
+        message: 'model "deepseek-v4-flash" produced a tool call the provider could not parse (tool call written as DSML markup in the reasoning, finish_reason stop); the step\'s output was discarded',
+        code: 'MALFORMED_TOOL_CALL',
+      },
+    })
+  })
+
+  it('keeps a DSML-in-reasoning stop successful when the step also answered in text', () => {
+    expect(mapStopReason(assistant({
+      stopReason: 'stop',
+      content: [{ type: 'thinking', thinking: '<｜DSML｜invoke name="bash">' }, { type: 'text', text: 'done' }],
+    }))).toEqual({ kind: 'stop' })
+  })
+
   it('defaults the error message when pi-ai omits it', () => {
     expect(mapStopReason(assistant({ stopReason: 'error' })))
       .toEqual({ kind: 'error', failure: { message: 'pi-ai stream error', code: 'PI_AI_ERROR' } })

@@ -1,0 +1,186 @@
+# Alice modifications
+
+Changes this fork carries on top of the upstream tag it is pinned at. Alice's own
+configuration lives in a dsh profile patch (`cmd/alice-agent/internal/cli/harness.go`
+in machinepulse-ai/alice-ultra) and never lands here; only what a patch cannot
+express does.
+
+## Base
+
+- **Upstream tag** — `dsh-v0.2.1-rc.5`; the branch is `alice/dsh-v0.2.1-rc.5`.
+- **Upstream fixes taken ahead of the tag** — cherry-picked with `-x` from
+  upstream `master`, so the next sync on a tag that contains them drops them:
+  `fix(llm-pi-ai): preserve later system reminders in request history`
+  (84a6d2bcaf), `fix(llm-pi-ai): offload old images when a request exceeds the
+  image-count bound` (1abd104891) and `fix(llm-pi-ai): offload count overflow in
+  steps and document the default` (b46adf9f64), plus `fix(python): deploy the
+  runtime from the workspace lockfile` (a7d0d02146) and `fix(python): preserve
+  deployed dependency validation` (eab19efcf8). Without the last two the
+  single-executable build re-resolves the runtime closure, picks up a
+  dependency newer than the lockfile (tslib 2.9.1 on 2026-11-03) and fails the
+  Office sidecar's lock check, so `scripts/build-harness.sh` cannot package rc.5.
+
+## The harness identity says Alice Harness
+
+- **What** — the `harness:identity` prompt section, the first line of every
+  system prompt this harness assembles, reads
+  `You are an AI agent powered by Alice Harness.` The sentence is a literal in
+  `packages/core/system-prompt/src/index.ts`; every test, snapshot and README
+  that quotes it is updated with it, which is the whole diff:
+  `s/powered by DeepSeek Harness/powered by Alice Harness/`.
+- **Why** — Alice ships this runtime as Alice Harness, and an agent asked what it
+  runs on answered DeepSeek, because that is what its own system prompt told it.
+  `includeHarnessIdentity: false` would drop the identity slot rather than
+  correct it, and a profile patch cannot reach a hardcoded string.
+- **Upstreamable** — no, this one is ours by definition. Upstream would take the
+  sentence as a config field instead; if it ever does, this fork drops the rename
+  and Alice sets the field from its patch.
+- **Re-applying after an upstream sync** — the conflicts are the quoted copies,
+  not the logic. Take upstream's side everywhere, then re-run the substitution
+  above over the tree and rebuild.
+
+## Pull-request CI is the Alice workflow, not upstream's
+
+- **What** — `.github/workflows/alice-ci.yml` runs on every pull request as two
+  hosted jobs plus an aggregate. `build, lint, snapshots, runtime`: `pnpm run
+  build` (tsc for both faces, so it is the typecheck), `lint:contracts-ready`,
+  the recorded-session replay of `snapshots/` (acp, sdk, session — the Web
+  client's snapshots under `apps/web/tests` need Chromium and are left out),
+  then the linux-x64 single-executable build with the exact command
+  alice-ultra's `scripts/build-harness.sh` runs. `unit tests`: `vitest run` with
+  20 s per test and no per-file 100% coverage bar, under two `vitest.config.ts`
+  switches: `DSH_TEST_SKIP_USER_SYSTEMD=1` excludes the six Linux
+  process-containment suites and the real-shell terminal suite
+  (`terminal-bash/tests/local.spec.ts`, whose pwsh motd arrives empty on a
+  loaded 4-vCPU runner); the containment cases' kill, abort and timeout paths launch
+  transient user-systemd scopes, and on the hosted runner the scope starts but
+  its bootstrap never runs, even after `loginctl enable-linger` made
+  `systemd-run --user --scope` succeed), and `DSH_TEST_SKIP_UNSHIPPED=1`
+  excludes what this build does not ship (`packages/experimental`, `client`,
+  `hooks`, `e2b`, `webhook`, `test-support`, `apps/`, `scripts/`). Both sets
+  still run on developer machines and upstream. The documentation gates
+  (`pnpm run test:docs`) are not in CI; run them by hand when touching docs.
+  Upstream's `ci.yml` and every other upstream workflow are unchanged in the
+  tree — deleting them would conflict on every sync and break the Agent Notes
+  and specs that link to them — and are **disabled in this repository's
+  Actions settings** (`gh workflow disable`; persists across pushes):
+  CI, CI master, Expected filenames, Build PR preview (Cloudflare), Issue
+  lifecycle, Issue policy, weighted-approval (both), Sandbox, Deploy
+  documentation, E2E (all three), Node Addon System (both), Release (dsh,
+  vendor, publish ×2, Python).
+- **Why** — this CI runs on company resources for a runtime that ships one
+  ACP profile. Upstream's matrix (enterprise 16-core pools that never get a
+  runner here, four Windows lanes, three Node versions, benchmarks, npm
+  publishing lint, Python SDK tests, a 10-minute Playwright web-client lane)
+  proves things this build does not ship, and its runner pools, GitHub App,
+  Cloudflare token and npm/PyPI publishing do not exist in machinepulse-ai.
+- **Upstreamable** — no. An upstream sync leaves `alice-ci.yml` untouched; if
+  upstream renames a script this workflow calls (`typecheck`,
+  `lint:contracts-ready`, `test:docs`, `check:ci:snapshot`,
+  `build:native-system`), follow the rename here, and check
+  `gh workflow list --all` still shows the upstream set disabled.
+
+## The ACP bridge streams assistant text and thoughts as the model produces them
+
+- **What** — `packages/acp/acp` subscribes to `agent/assistant-stream` for the
+  Agents it owns and relays each `text-delta` as an `agent_message_chunk` and each
+  `reasoning-delta` as an `agent_thought_chunk`, on the same ordered per-session
+  chain as tool lifecycle and usage. When the message commits, the blocks that
+  already streamed are skipped, so a client sees each block exactly once.
+  Recorded ACP snapshots refreshed; README pair and an Agent Note
+  (`.agents/notes/implemented/feature/2026-09-21-acp-live-assistant-stream.md`)
+  describe it.
+- **Why** — Alice drives this runtime over ACP and shows the answer in a chat. The
+  bridge only projected committed messages, so a long text answer stayed invisible
+  until its last token, indistinguishable from a stall.
+- **Upstreamable** — yes: a pure addition to the bridge. The one behavior upstream
+  may not want is that a model attempt failing after it streamed leaves its partial
+  text on the wire; ACP has no update that retracts delivered text.
+
+## Named credentials survive the child-environment scrub
+
+- **What** — `scrubbedParentEnv()` in `packages/subprocess/subprocess` keeps a
+  credential-shaped parent variable when its name is listed in the
+  comma-separated `DSH_ENV_PASSTHROUGH`. The `DSH_*` scrub is unchanged, so the
+  list never reaches a child. The alice-agent daemon sets it to the names it
+  injected for the task, minus the harness's own gateway key.
+- **Why** — the scrub drops every name matching `KEY|PASSWORD|SECRET|TOKEN`,
+  so `ALICE_TASK_HELPER_SECRET`, `ALICE_TOKEN`, `ALICE_TASK_TOKEN` and
+  agent-configured `*_TOKEN`/`*_KEY` never reached the bash tool or MCP
+  servers; `alice-agent lark-token` failed in every harness task. A profile
+  patch cannot express an allowlist.
+- **Upstreamable** — maybe, as a validated config field instead of an
+  environment variable. Re-applying after a sync is the one loop in
+  `scrubbedParentEnv()` plus its test case in `tests/service.spec.ts`.
+
+## A tool call the provider could not parse is retried with a correction
+
+- **What** — `classifyPiAiError()` in `packages/llm/llm-pi-ai/src/stream.ts`
+  maps `… MALFORMED_FUNCTION_CALL` / `MALFORMED_RESPONSE` to the new
+  `MALFORMED_TOOL_CALL` code and `Provider finish_reason: content_filter` to
+  `CONTENT_FILTER` (both constants in `packages/llm/llm/src/error.ts`), and
+  `mapStopReason()` words those two failures with the model name instead of
+  pi-ai's bare `Provider finish_reason: …`. A normal-mode `retryPolicy` takes
+  `recoveryMessages` (`packages/llm/llm/src/retry-policy.ts`), a text per
+  retryable code; `dsh-llm-retry` appends it to the session as a user message
+  (source `llm-retry`, form `notice`, declared on `MessageSourceMap` the way
+  `model-selection` declares its notice) right before that code's retry, so the
+  rebuilt request carries it. `pi-ai-gateway-recovery.spec.ts` replays a
+  `content_filter` finish through the real adapter, the loop and the plugin.
+- **Why** — Gemini 3.x through the MachinePulse gateway regularly ends a step
+  with `MALFORMED_FUNCTION_CALL` (the model writes the call as text,
+  `call:default_api:bash{command:…}`), which the gateway's new-api build folds
+  into `content_filter`. The text fell through to `PI_AI_ERROR` and failed the
+  turn with `Internal error (-32603)`: about a third of autoroute tasks on
+  `gemini-3.8-flash-high` and `gemini-3.5-flash-lite` in the week of
+  2026-10-08. The same context fails the same way on a verbatim retry, while a
+  one-line correction appended before the retry recovered 24/24 reproductions,
+  so the retry needs a model-visible message — which the plugin forbade and a
+  profile patch cannot add. The codes and the correction are configuration,
+  so Alice's patch opts the gateway route in and other routes keep today's
+  behavior.
+- **Upstreamable** — yes: the codes are provider-neutral, the field is
+  opt-in and validated, and the one model-visible input is logged like every
+  other. Re-applying after a sync is the two `if`s in `classifyPiAiError()`,
+  `describeDiscardedStep()`, the `recoveryMessages` field and its checks in
+  `retry-policy.ts`, the append in `dsh-llm-retry`'s `backoff()` with its `MessageSourceMap`
+  declaration, the two
+  constants, and the three specs.
+
+## A gateway-relayed stream cut is a retryable transport failure
+
+- **What** — `classifyPiAiError()` in `packages/llm/llm-pi-ai/src/stream.ts`
+  maps `… stream was interrupted` and `… HTTP/2 stream failed` to `TRANSPORT`.
+  `packages/llm/llm-retry/tests/pi-ai-gateway-recovery.spec.ts` replays the cut
+  through the real pi-ai OpenAI-completions adapter, the agent loop and
+  `llm-retry`.
+- **Why** — the MachinePulse gateway (new-api) reports an upstream stream cut
+  as an in-band `error` chunk (`Upstream response stream was interrupted`,
+  `Upstream HTTP/2 stream failed`). Neither wording matched a transport pattern,
+  so it fell through to the non-retryable `PI_AI_ERROR` and failed the whole
+  turn, although the default retry policy already retries `TRANSPORT`. The
+  failed attempt never commits an assistant message, so none of its tool calls
+  has run when the request is retried. A profile patch cannot change error
+  classification.
+- **Upstreamable** — yes, as two more gateway wordings beside the existing
+  transport patterns. Re-applying after a sync is the one `if` in
+  `classifyPiAiError()` plus the spec and its `dsh-llm-pi-ai` devDependency in
+  `packages/llm/llm-retry/package.json`.
+
+## A DeepSeek tool call written into the reasoning is a malformed tool call
+
+- **What** — `mapStopReason()` in `packages/llm/llm-pi-ai/src/stream.ts` maps a
+  `stop` whose only content is reasoning carrying DSML markup (`｜DSML｜`) —
+  no text, no tool call — to `MALFORMED_TOOL_CALL` instead of a successful
+  stop. Two specs in `packages/llm/llm-pi-ai/tests/convert.spec.ts`.
+- **Why** — deepseek-flash through the MachinePulse gateway sometimes writes
+  the next tool call as DSML markup inside `reasoning_content` and stops with
+  `finish_reason: stop` and no `tool_calls` (1 in 30 replays of a real Alice
+  step on 2026-11-03). The harness took that as the end of the turn, ACP
+  reported `end_turn`, and Alice recorded a completed task whose only output
+  was the run's opening sentence; over a 20–40 step task this ended most
+  DeepSeek Luma runs halfway. `MALFORMED_TOOL_CALL` is already retried with a
+  correction on the gateway route, so the step is replayed instead.
+- **Upstreamable** — yes: DSML is DeepSeek's own tool-call format. Re-applying
+  after a sync is the `if` in the `stop` branch, `hasToolCallOnlyInThinking()`
+  and the two specs.

@@ -101,6 +101,25 @@ function describeDiscardedStep(code: string, text: string, model: string): strin
   }
 }
 
+/** DeepSeek's tool-call markup tag, e.g. `<｜DSML｜invoke name="bash">`. */
+const DSML_MARKUP = /[｜|]{1,2}\s*DSML\s*[｜|]{1,2}/
+
+/**
+ * Whether a stopped message wrote its tool call only inside the reasoning:
+ * no text, no tool call, and DSML markup in a thinking block.
+ * @param message - the terminal assistant message.
+ * @returns true when the step's tool call never reached the tool-call channel.
+ */
+function hasToolCallOnlyInThinking(message: AssistantMessage): boolean {
+  let leaked = false
+  for (const block of message.content) {
+    if (block.type === 'toolCall') return false
+    if (block.type === 'text' && block.text.trim() !== '') return false
+    if (block.type === 'thinking' && DSML_MARKUP.test(block.thinking)) leaked = true
+  }
+  return leaked
+}
+
 /**
  * Map a terminal pi-ai event to the harness finish reason.
  * @param message - the assistant message carried by the `done` or `error` event.
@@ -137,6 +156,19 @@ export function mapStopReason(message: AssistantMessage, contextWindow?: number)
           failure: {
             message: `model "${message.model}" returned a completed response with no content`,
             code: EMPTY_RESPONSE_CODE,
+          },
+        }
+      }
+      // DeepSeek sometimes writes the step's tool call as DSML markup inside
+      // its reasoning and stops with no tool call and no text. Ending the turn
+      // there drops the work the model meant to do next, so the step counts as
+      // a malformed tool call and the retry policy can replay it.
+      if (hasToolCallOnlyInThinking(message)) {
+        return {
+          kind: 'error',
+          failure: {
+            message: `model "${message.model}" produced a tool call the provider could not parse (tool call written as DSML markup in the reasoning, finish_reason stop); the step's output was discarded`,
+            code: MALFORMED_TOOL_CALL_CODE,
           },
         }
       }

@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-11-10-alice-retry-message-source.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-11-10-alice-retry-message-source.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-11-10-alice-retry-message-source:
+  en: f2812dd4cf23ebfd
+  zh: 2684f97576dd0d6f
+/2026-11-10-alice-retry-message-source/summary:
+  en: a7d9f235e5055ba8
+  zh: 6b5dd3fb883e9d41
+/2026-11-10-alice-retry-message-source/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-11-10-alice-retry-message-source/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-11-10-alice-retry-message-source/compatibility:
+  en: 909fc67bad9901a9
+  zh: 4e315fdb9771511d
+/2026-11-10-alice-retry-message-source/verification:
+  en: f0cb1bf6e6d4fe1f
+  zh: b2b56b7f37ee2674
+/2026-11-10-alice-retry-message-source/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

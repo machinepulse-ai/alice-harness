@@ -20,25 +20,6 @@ express does.
   dependency newer than the lockfile (tslib 2.9.1 on 2026-11-03) and fails the
   Office sidecar's lock check, so `scripts/build-harness.sh` cannot package rc.5.
 
-## The harness identity says Alice Harness
-
-- **What** — the `harness:identity` prompt section, the first line of every
-  system prompt this harness assembles, reads
-  `You are an AI agent powered by Alice Harness.` The sentence is a literal in
-  `packages/core/system-prompt/src/index.ts`; every test, snapshot and README
-  that quotes it is updated with it, which is the whole diff:
-  `s/powered by DeepSeek Harness/powered by Alice Harness/`.
-- **Why** — Alice ships this runtime as Alice Harness, and an agent asked what it
-  runs on answered DeepSeek, because that is what its own system prompt told it.
-  `includeHarnessIdentity: false` would drop the identity slot rather than
-  correct it, and a profile patch cannot reach a hardcoded string.
-- **Upstreamable** — no, this one is ours by definition. Upstream would take the
-  sentence as a config field instead; if it ever does, this fork drops the rename
-  and Alice sets the field from its patch.
-- **Re-applying after an upstream sync** — the conflicts are the quoted copies,
-  not the logic. Take upstream's side everywhere, then re-run the substitution
-  above over the tree and rebuild.
-
 ## Pull-request CI is the Alice workflow, not upstream's
 
 - **What** — `.github/workflows/alice-ci.yml` runs on every pull request as two

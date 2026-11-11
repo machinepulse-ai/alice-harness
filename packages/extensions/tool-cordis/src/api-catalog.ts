@@ -4007,6 +4007,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Replay owner for one service-wide estimator and isolated per-session folds.',
     methods: [
       {
+        signature: 'tokenUsage(session: Session): TokenUsageProjection',
+        description: 'Read cumulative provider usage from the committed Session log.',
+        parameters: [{ name: 'session', description: 'Session whose measured provider usage is read.' }],
+        returns: 'a detached snapshot of the four disjoint usage buckets.',
+      },
+      {
         signature: 'contextPressure(session: Session): Pick<ContextPressureProjection, \'pressureTokens\' | \'contextWindow\'>',
         description: 'Read the latest logged provider prompt size and route capacity.',
         parameters: [{ name: 'session', description: 'Session whose committed usage and request capacity are read.' }],
@@ -7933,7 +7939,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ResolvedNormalRetryPolicy',
-    declaration: 'export interface ResolvedNormalRetryPolicy extends ResolvedRetryBackoff {\n    readonly mode: \'normal\';\n    readonly maxRetries: number;\n    readonly retryableCodes: readonly string[];\n}',
+    declaration: 'export interface ResolvedNormalRetryPolicy extends ResolvedRetryBackoff {\n    readonly mode: \'normal\';\n    readonly maxRetries: number;\n    readonly retryableCodes: readonly string[];\n    readonly recoveryMessages: Readonly<Record<string, string>>;\n}',
   },
   {
     name: 'ResolvedRetryBackoff',
@@ -9510,6 +9516,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TokenUsage',
     declaration: 'export interface TokenUsage {\n    inputTokens: number;\n    outputTokens: number;\n    totalTokens?: number;\n    cacheReadTokens?: number;\n    cacheWriteTokens?: number;\n    reasoningTokens?: number;\n}',
+  },
+  {
+    name: 'TokenUsageProjection',
+    declaration: 'export interface TokenUsageProjection {\n    uncachedInputTokens: number;\n    outputTokens: number;\n    cacheReadTokens: number;\n    cacheWriteTokens: number;\n}',
   },
   {
     name: 'ToolActivationContext',

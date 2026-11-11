@@ -53,6 +53,10 @@ interface TokenSurfaceNode {
 
 Surface order is authoritative; replacement nodes can have higher durable seqs than later positional nodes. The snapshot is immutable and does not grow when the underlying replay fold advances.
 
+## `TokenUsageProjection`
+
+Cumulative provider usage from the durable session log. The four disjoint counters are `uncachedInputTokens`, `outputTokens`, `cacheReadTokens`, and `cacheWriteTokens`. Reasoning tokens are included in output.
+
 ## `ContextPressureProjection`
 
 `ctx.tokenMeter.contextPressure(session)` synchronously reads the latest logged `pressureTokens` and `contextWindow`; the client projection also derives `projectedTokens` from surface changes. These display values do not price a new request; use `measure()` for request pricing.
@@ -106,6 +110,13 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 Replay owner for one service-wide estimator and isolated per-session folds.
 
 ```ts cordis-catalog
+/**
+ * Read cumulative provider usage from the committed Session log.
+ * @param session - Session whose measured provider usage is read.
+ * @returns a detached snapshot of the four disjoint usage buckets.
+ */
+tokenUsage(session: Session): TokenUsageProjection
+
 /**
  * Read the latest logged provider prompt size and route capacity.
  * @param session - Session whose committed usage and request capacity are read.

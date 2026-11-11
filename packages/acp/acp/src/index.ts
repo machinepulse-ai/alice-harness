@@ -148,6 +148,10 @@ export function apply(ctx: Context, config: AcpConfig): void {
     ownedRecord(agent)?.onAgentStatus(status)
   })
 
+  ctx.on('agent/assistant-stream', ({ agent, frame }) => {
+    ownedRecord(agent)?.onAssistantStream(frame)
+  })
+
   ctx.on('llm/adapters-updated', () => {
     for (const record of sessions.values()) record.topologyChanged()
   })

@@ -33,7 +33,7 @@ describe('ACP automation output boundary', () => {
     harness = undefined
   })
 
-  it('emits committed reasoning, generic tool lifecycle, usage, and final text in order', async () => {
+  it('emits live reasoning, generic tool lifecycle, usage, and live text in order', async () => {
     harness = await makeBridgeHarness({ script: [toolCallResponse(), textResponse('done')] })
     harness.ctx.tools.register(defineContentToolFixture({
       name: 'echo',
@@ -43,22 +43,24 @@ describe('ACP automation output boundary', () => {
     }))
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
-    await harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] })
+    const result = await harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] })
+    expect(result.usage).toEqual({ inputTokens: 13, outputTokens: 6, cachedReadTokens: 0, cachedWriteTokens: 0, totalTokens: 19 })
 
     await vi.waitFor(() => { expect(harness!.updates.at(-1)?.sessionUpdate).toBe('usage_update') })
+    // Thought and text arrive as the model emits them; tool lifecycle and
+    // usage still come off the durable events, in their committed order.
     expect(harness.updates.map(update => update.sessionUpdate)).toEqual([
       'agent_thought_chunk',
       'usage_update',
       'tool_call',
       'tool_call_update',
-      'agent_message_chunk',
+      ...Array.from('done', () => 'agent_message_chunk'),
       'usage_update',
     ])
     expect(harness.updates[0]).toMatchObject({
       sessionUpdate: 'agent_thought_chunk',
       content: { type: 'text', text: 'inspect first' },
     })
-    expect('messageId' in harness.updates[0]!).toBe(true)
     expect(harness.updates[2]).toMatchObject({
       sessionUpdate: 'tool_call',
       toolCallId: 'call-1',
@@ -73,17 +75,14 @@ describe('ACP automation output boundary', () => {
       status: 'completed',
       content: [{ type: 'content', content: { type: 'text', text: 'tool result' } }],
     })
-    expect(harness.updates[4]).toMatchObject({
-      sessionUpdate: 'agent_message_chunk',
-      content: { type: 'text', text: 'done' },
-    })
-    expect('messageId' in harness.updates[4]!).toBe(true)
-    expect(harness.updates[5]).toMatchObject({
+    expect(harness.updates.slice(4, 8).map(update => 'content' in update ? update.content : undefined))
+      .toEqual(Array.from('done', text => ({ type: 'text', text })))
+    expect(harness.updates[8]).toMatchObject({
       sessionUpdate: 'usage_update',
       size: 1_024,
     })
-    if (harness.updates[5]?.sessionUpdate !== 'usage_update') throw new Error('expected usage update')
-    expect(typeof harness.updates[5].used).toBe('number')
+    if (harness.updates[8]?.sessionUpdate !== 'usage_update') throw new Error('expected usage update')
+    expect(typeof harness.updates[8].used).toBe('number')
   })
 
   it('ignores events from agents the bridge does not own', async () => {
@@ -109,11 +108,9 @@ describe('ACP automation output boundary', () => {
     await agent.whenIdle()
     await vi.waitFor(() => { expect(harness!.updates.at(-1)?.sessionUpdate).toBe('usage_update') })
 
-    expect(harness.updates[0]).toMatchObject({
-      sessionUpdate: 'agent_message_chunk',
-      content: { type: 'text', text: 'external' },
-    })
-    expect('messageId' in harness.updates[0]!).toBe(true)
+    expect(harness.updates.flatMap(update => (
+      update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text' ? [update.content.text] : []
+    )).join('')).toBe('external')
   })
 
   it('contains output conversion failure outside an ACP prompt', async () => {
@@ -156,6 +153,6 @@ describe('ACP automation output boundary', () => {
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     harness.onSessionUpdateError = () => {}
     await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] }))
-      .resolves.toEqual({ stopReason: 'end_turn' })
+      .resolves.toMatchObject({ stopReason: 'end_turn' })
   })
 })

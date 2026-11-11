@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-21-alice-hosted-runner-ci.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-21-alice-hosted-runner-ci.md
+/agent-note-alice-ci-runs-on-hosted-runners-only:
+  en: ae263d9e0a945e5c
+  zh: 0ab3ec775f6004d1
+/agent-note-alice-ci-runs-on-hosted-runners-only/problem:
+  en: f713d196e8ad6242
+  zh: 55e56dc2310c8305
+/agent-note-alice-ci-runs-on-hosted-runners-only/decision:
+  en: 0ca7b03fd91269b7
+  zh: 193d6f97fb08cb50
+/agent-note-alice-ci-runs-on-hosted-runners-only/alternatives-considered:
+  en: 1feea1dc9f6ff5eb
+  zh: b3ceca4e41b524c0
+/agent-note-alice-ci-runs-on-hosted-runners-only/consequences:
+  en: dd42e6f7cb383571
+  zh: cfe82ac9beeab216

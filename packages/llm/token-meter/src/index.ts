@@ -29,10 +29,11 @@ import type {
   TokenMeasurement,
   TokenMeasurementBaseline,
   TokenMeterConfig,
+  TokenUsageProjection,
 } from './types.ts'
 import { contextBreakdownProjectionDefinition } from './breakdown-projection.ts'
 import { contextPressureProjectionDefinition, tokenUsageProjectionDefinition } from './usage-projection.ts'
-import type { ContextPressureState } from './usage-projection.ts'
+import type { ContextPressureState, TokenUsageState } from './usage-projection.ts'
 import { estimateMessage, estimateToolsTokens } from './estimate.ts'
 import { advanceMeasurement, measurementProjectionDefinition } from './measurement-projection.ts'
 import type { MeasurementState } from './measurement-projection.ts'
@@ -93,6 +94,7 @@ export class TokenMeter extends Service {
 
   private readonly states = new WeakMap<Session, ReplayState>()
   private measurementProjectionHandle: ProjectionHandle<MeasurementState> | undefined
+  private tokenUsageProjectionHandle!: ProjectionHandle<TokenUsageState>
   private contextPressureProjectionHandle!: ProjectionHandle<ContextPressureState>
 
   constructor(ctx: Context, config: TokenMeterConfig = {}) {
@@ -103,7 +105,7 @@ export class TokenMeter extends Service {
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
     this.measurementProjectionHandle = await ctx.sessionProjections.register(measurementProjectionDefinition)
-    await ctx.sessionProjections.register(tokenUsageProjectionDefinition)
+    this.tokenUsageProjectionHandle = await ctx.sessionProjections.register(tokenUsageProjectionDefinition)
     this.contextPressureProjectionHandle = await ctx.sessionProjections.register(contextPressureProjectionDefinition)
     await ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
 
@@ -112,6 +114,15 @@ export class TokenMeter extends Service {
     ctx.on('session/event', (session) => {
       if (this.states.has(session)) this._sync(session)
     })
+  }
+
+  /**
+   * Read cumulative provider usage from the committed Session log.
+   * @param session - Session whose measured provider usage is read.
+   * @returns a detached snapshot of the four disjoint usage buckets.
+   */
+  tokenUsage(session: Session): TokenUsageProjection {
+    return { ...this.tokenUsageProjectionHandle.stateOf(session).totals }
   }
 
   /**

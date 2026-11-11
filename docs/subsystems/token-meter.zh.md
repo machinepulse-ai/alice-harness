@@ -53,6 +53,10 @@ interface TokenSurfaceNode {
 
 表层顺序具有权威性；替换节点的持久 seq 可能高于位置排在其后的节点。该快照不可变，不会随底层回放折叠推进而增长。
 
+## `TokenUsageProjection`
+
+持久会话日志中的提供方累计用量。四个互不重叠的计数为 `uncachedInputTokens`、`outputTokens`、`cacheReadTokens` 和 `cacheWriteTokens`。推理 token 已计入输出。
+
 ## `ContextPressureProjection`
 
 `ctx.tokenMeter.contextPressure(session)` 同步读取最新记录的 `pressureTokens` 和 `contextWindow`；客户端投影还根据表层变化派生 `projectedTokens`。这些显示值不为新请求计价；请求计价使用 `measure()`。
@@ -106,6 +110,13 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 Replay owner for one service-wide estimator and isolated per-session folds.
 
 ```ts cordis-catalog
+/**
+ * Read cumulative provider usage from the committed Session log.
+ * @param session - Session whose measured provider usage is read.
+ * @returns a detached snapshot of the four disjoint usage buckets.
+ */
+tokenUsage(session: Session): TokenUsageProjection
+
 /**
  * Read the latest logged provider prompt size and route capacity.
  * @param session - Session whose committed usage and request capacity are read.

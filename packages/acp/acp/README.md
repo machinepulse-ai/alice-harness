@@ -70,14 +70,16 @@ One connection can run several sessions at once, each independent. The calls a c
 | `session/set_config_option` | A serialized update to the advertised `model` or `reasoning_effort`, returning the complete resulting state. |
 | `session/prompt` | Ordered text, resource links, and supported images, one prompt at a time per session; settlement follows root and descendant completion plus ordered update delivery. |
 | `session/cancel` / `$/cancel_request` | The prompt-owned cancellation path; without an ACP prompt in flight it cancels autonomous work, while unknown session ids are no-ops. |
-| `session/update` | Committed assistant messages and thoughts, generic tool lifecycle, configuration changes, and context usage, serialized per session. |
+| `session/update` | Assistant text and thoughts as the model streams them, generic tool lifecycle, configuration changes, and context usage, serialized per session. |
 | `session/request_permission` | A permission prompt with one-shot allow/reject choices; your client can answer automatically. |
 
 Session listing and resume admit ordinary forks, including historical logs with `parentSession`; `origin: subagent` remains excluded.
 
-A prompt remains in flight while managed descendants run, while their results trigger later root turns, and while committed output drains. Root work accepted during that output drain joins the same activity interval before completion. Its completion includes the latest root stop reason and any assistant output delivery failure; only the original prompt turn pins the model selection captured at admission. Cancellation stops the root activity present at that call and waits for that activity and its queued output. Later child messages may start autonomous work and do not delay the cancelled response; the session remains available for later prompts. Idle descendants with parked inbox messages remain resident but do not delay prompt completion. Closing the session also drains its descendants.
+A prompt remains in flight while managed descendants run, while their results trigger later root turns, and while committed output drains. Root work accepted during that output drain joins the same activity interval before completion. Its completion includes the latest root stop reason and any assistant output delivery failure. Cancellation stops the root activity present at that call and waits for that activity and its queued output. Later child messages may start autonomous work and do not delay the cancelled response; the session remains available for later prompts. Idle descendants with parked inbox messages remain resident but do not delay prompt completion. Closing the session also drains its descendants.
 
 A failure to append `turn/start` or `turn/end` rejects the prompt even when a preceding turn completed.
+
+`session/prompt` returns optional `usage` from the durable token-usage projection: uncached input, output, cache reads, and cache writes accumulated during that prompt. The baseline is captured after session creation or resume, so historical turns are excluded. Reasoning is already part of output. Without measured usage, the field is omitted; `usage_update.used/size` continues to describe context occupancy.
 
 Session configuration offers opaque provider/model choices from the live LLM service catalog and a `reasoning_effort` selector when the exact model declares one. An option change records the Session selection and takes effect at the next model step, including a continuation in the current turn; an already prepared step and its retries keep their captured selection. Image admission checks the selection current when admission begins. Resume restores a recorded selection even when no request has used it yet. ACP clients are trusted controllers: stdio MCP entries authorize their absolute commands and environment, HTTP entries authorize their absolute HTTP(S) URLs and headers, and any initial connection or discovery failure rolls back the unpublished Agent. Unsupported surfaces are omitted or rejected: `session/load`, deletion, fork, additional directories, SSE or ACP-transport MCP, modes, commands, plans, terminals, client filesystem operations, and elicitation.
 
@@ -95,7 +97,7 @@ This section explains how the server realizes the behavior above and points at t
 
 The server is an automation transport with an intentionally standard public protocol. Three commitments shape it:
 
-- **Standard semantic updates only.** The wire carries committed messages and thoughts, generic tool lifecycle, configuration, and context usage; raw provider deltas, retry attempts, DSH presentation data, and unsupported content stay off the wire.
+- **Standard semantic updates only.** The wire carries assistant text and thought deltas as the model produces them, the other committed message blocks, generic tool lifecycle, configuration, and context usage; provider-specific chunk kinds, DSH presentation data, and unsupported content stay off the wire. A text or thought block that streamed live is not sent again when its message commits.
 - **Truthful capability and configuration state.** `initialize` advertises only mounted support, topology changes publish complete configuration options, and a prompt pins the exact route it admitted.
 - **Quiescence before settlement.** Prompt and close operations settle only after their owned admission, Agent activity, ordered updates, descendants, persistence, and disposal have reached the required terminal state.
 
@@ -175,6 +177,7 @@ These limits define when this package is a poor fit or needs special operational
 - **Raster prompt images only** — PNG, JPEG, WebP, and GIF require a durable attachment store and an exact image-capable route.
 - **MCP tools only** — MCP resources and prompts have no DSH consumer.
 - **No transcript replay or interactive extensions** — session deletion, fork, `session/load`, modes, commands, plans, terminals, client filesystem operations, and elicitation remain outside this automation surface.
+- **Live deltas are not retracted** — a model attempt that fails after streaming leaves its partial text on the wire, and a retried attempt streams again after it; ACP has no update that withdraws delivered text.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -701,4 +701,64 @@ describe('pi-ai system prompt source', () => {
     await expect(toPiContext(options, imageContext(projectionStore(read)))).rejects.toThrow(error)
     expect(read).not.toHaveBeenCalled()
   })
+
+  it('sanitizes $ref, $defs and additionalProperties from tool schemas for Gemini only', () => {
+    const schema = {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      additionalProperties: false,
+      $defs: {
+        Alias: { $ref: '#/$defs/Leaf' },
+        Leaf: { type: 'string', description: 'leaf' },
+        Node: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            next: { $ref: '#/$defs/Node', description: 'recursive link' },
+          },
+        },
+      },
+      properties: {
+        item: { $ref: '#/$defs/Alias', description: 'override' },
+        tree: { $ref: '#/$defs/Node' },
+        additionalProperties: { type: 'boolean' },
+      },
+      required: ['item'],
+    }
+    const mcpTool = { name: 'mcp_query', description: 'Query', parameters: schema }
+    const deferredTool = { name: 'mcp_late', description: 'Late', parameters: schema, deferLoading: true }
+    const added = createDeveloperMessage({ source: { kind: 'test' }, content: [{ type: 'tool-addition', toolName: 'mcp_late' }] })
+
+    const geminiCtx = toPiContext({
+      provider: 'machinepulse',
+      model: 'google/gemini-4-neon',
+      tools: [mcpTool, deferredTool],
+      messages: [question, added],
+    })
+    const expectedParams = {
+      type: 'object',
+      properties: {
+        item: { type: 'string', description: 'override' },
+        tree: {
+          type: 'object',
+          properties: {
+            next: { type: 'object', description: 'recursive link' },
+          },
+        },
+        additionalProperties: { type: 'boolean' },
+      },
+      required: ['item'],
+    }
+    expect(geminiCtx.tools?.[0]?.parameters).toEqual(expectedParams)
+    expect((geminiCtx.messages[1] as { toolsAdded?: Array<{ parameters: unknown }> }).toolsAdded?.[0]?.parameters)
+      .toEqual(expectedParams)
+
+    const gptCtx = toPiContext({
+      provider: 'machinepulse',
+      model: 'gpt-6.1-sol',
+      tools: [mcpTool],
+      messages: [question],
+    })
+    expect(gptCtx.tools?.[0]?.parameters).toBe(schema)
+  })
 })

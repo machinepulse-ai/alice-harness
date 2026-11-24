@@ -55,17 +55,30 @@ index 0eeaffa..2e13492 100644
                              }
                              else if (toolCall.custom?.input) {
                                  const nextInput = getCustomToolCallInput(block) + toolCall.custom.input;
-@@ -1033,6 +1037,9 @@ export function convertMessages(model, context, compat, options) {
+@@ -1023,23 +1027,29 @@ export function convertMessages(model, context, compat, options) {
+             if (toolCalls.length > 0) {
+-                assistantMsg.tool_calls = toolCalls.map((tc) => {
++                const isGeminiModel = /(?:^|\/)gemini(?:$|[-.])/i.test(model.id);
++                const hasGeminiSignature = toolCalls.some((tc) => Boolean(tc.thoughtSignature && !parseLegacyEncryptedReasoningDetail(tc.thoughtSignature)));
++                assistantMsg.tool_calls = toolCalls.map((tc, index) => {
+                     const customInputProperty = options?.grammarToolInputProperties?.get(tc.name);
+                     if (customInputProperty !== undefined) {
+                         return {
+                             id: tc.id,
+                             type: "custom",
+                             custom: {
+                                 name: tc.name,
+                                 input: sanitizeSurrogates(getGrammarToolInput(tc.name, tc.arguments, customInputProperty)),
                              },
                          };
                      }
 +                    const geminiThoughtSignature = tc.thoughtSignature && !parseLegacyEncryptedReasoningDetail(tc.thoughtSignature)
 +                        ? tc.thoughtSignature
-+                        : undefined;
++                        : (isGeminiModel && !hasGeminiSignature && index === 0 ? "skip_thought_signature_validator" : undefined);
                      return {
                          id: tc.id,
                          type: "function",
-@@ -1040,6 +1047,7 @@ export function convertMessages(model, context, compat, options) {
+                         function: {
                              name: tc.name,
                              arguments: JSON.stringify(tc.arguments),
                          },

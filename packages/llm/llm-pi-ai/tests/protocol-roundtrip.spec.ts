@@ -196,4 +196,44 @@ describe('protocol history round trips', () => {
     expect(source.requests).toHaveLength(3)
     expect(target.requests).toHaveLength(1)
   })
+
+  it('injects skip_thought_signature_validator only on unsigned Gemini tool-call replay', async () => {
+    vi.stubEnv('PROTOCOL_ROUNDTRIP_KEY', 'test-key')
+    const gpt = await mockServer([{ events: frames('openai-responses', true) }])
+    const gemini = await mockServer([{ events: frames('openai-completions', true) }, { events: frames('openai-completions') }])
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, { providers: {
+      'gpt-route': { api: 'openai-responses', baseURL: gpt.url, apiKeyEnv: 'PROTOCOL_ROUNDTRIP_KEY', cacheRetention: 'none', models: [{ id: 'gpt-6.1-sol' }] },
+      'gemini-route': { api: 'openai-completions', baseURL: gemini.url, apiKeyEnv: 'PROTOCOL_ROUNDTRIP_KEY', cacheRetention: 'none', models: [{ id: 'gemini-4-neon' }] },
+    } })
+
+    const history: Message[] = [createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Look up both values.' }] })]
+    const gptTurn = await assemble(ctx, { provider: 'gpt-route', model: 'gpt-6.1-sol', messages: history, tools: [tool] })
+    const gptCalls = gptTurn.message.content.filter(block => block.type === 'tool-call')
+    history.push(gptTurn.message, ...gptCalls.map(call => createToolResultMessage({
+      callId: call.id, content: [{ type: 'text', text: 'value' }], isError: false,
+    })))
+
+    // Cross-model switch GPT -> Gemini: unsigned historical tool turn gets the bypass sentinel on its first call only.
+    const geminiTurn = await assemble(ctx, { provider: 'gemini-route', model: 'gemini-4-neon', messages: history, tools: [tool] })
+    const firstWireCalls = wireHistory(gemini.requests[0], 'openai-completions')
+      .flatMap(message => (message as { tool_calls?: unknown[] }).tool_calls ?? [])
+    expect(firstWireCalls).toMatchObject([{ extra_content: { google: { thought_signature: 'skip_thought_signature_validator' } } }, {}])
+    expect(firstWireCalls[1]).not.toHaveProperty('extra_content')
+
+    // Same-model Gemini continuation keeps the real signature on Gemini's own turn and leaves its second parallel call unsigned.
+    const geminiCalls = geminiTurn.message.content.filter(block => block.type === 'tool-call')
+    history.push(geminiTurn.message, ...geminiCalls.map(call => createToolResultMessage({
+      callId: call.id, content: [{ type: 'text', text: 'value' }], isError: false,
+    })))
+    await assemble(ctx, { provider: 'gemini-route', model: 'gemini-4-neon', messages: history, tools: [tool] })
+    const assistantTurns = wireHistory(gemini.requests[1], 'openai-completions')
+      .filter(message => Array.isArray((message as { tool_calls?: unknown[] }).tool_calls))
+      .map(message => (message as { tool_calls: unknown[] }).tool_calls)
+    expect(assistantTurns).toHaveLength(2)
+    expect(assistantTurns[1]).toMatchObject([{ extra_content: { google: { thought_signature: 'gemini-signature' } } }, {}])
+    expect(assistantTurns[1]?.[1]).not.toHaveProperty('extra_content')
+  })
 })

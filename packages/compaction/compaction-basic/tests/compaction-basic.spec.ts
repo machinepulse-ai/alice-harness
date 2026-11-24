@@ -13,7 +13,7 @@ import {
   resolveTargetPolicy,
 } from '@deepseek-ai/dsh-compaction-basic/src/config.ts'
 import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
-import LlmRuntime, { createUserMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, createSystemMessage, createToolResultMessage, LlmAdapter , createMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, ReasoningEffortId, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, createSystemMessage, createToolResultMessage, LlmAdapter , createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type {
   ContentBlock,
@@ -1819,6 +1819,34 @@ describe('model-switch pressure', () => {
     const session = conversation(4)
     await request(ctx, session, { provider: 'small', model: 'small' })
     expect(adapter.lastOptions).toMatchObject({ provider: 'summary', model: 'summary' })
+  })
+
+  it('forwards the session reasoningEffort to cache-reusing summarization but not to a separate summary model', async () => {
+    const effort = ReasoningEffortId('high')
+    const reused = harness()
+    const baseResolve = reused.adapter.resolveModel.bind(reused.adapter)
+    reused.adapter.resolveModel = async (provider, model) => ({
+      ...await baseResolve(provider, model),
+      reasoning: { efforts: [{ id: effort, name: 'High' }] },
+    })
+    const session = conversation(4)
+    session.append('request/header', {
+      header: { config: { provider: MODEL, model: MODEL, reasoningEffort: effort } },
+      reason: 'change',
+    })
+    await request(reused.ctx, session, { provider: 'small', model: 'small' })
+    expect(reused.adapter.lastOptions?.reasoningEffort).toBe(effort)
+
+    const separate = harness({ summarizationProvider: 'summary', summarizationModel: 'summary' })
+    separate.ctx.llm.registerAdapter(['summary'], separate.adapter)
+    const session2 = conversation(4)
+    session2.append('request/header', {
+      header: { config: { provider: MODEL, model: MODEL, reasoningEffort: effort } },
+      reason: 'change',
+    })
+    await request(separate.ctx, session2, { provider: 'small', model: 'small' })
+    expect(separate.adapter.lastOptions).toMatchObject({ provider: 'summary', model: 'summary' })
+    expect(separate.adapter.lastOptions?.reasoningEffort).toBeUndefined()
   })
 
   it('skips initial, incomplete, unchanged, below-threshold, disabled and already cancelled requests', async () => {

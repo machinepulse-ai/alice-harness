@@ -154,3 +154,31 @@ Upstream tag: `dsh-v0.2.2-rc.1`.
 - **Upstreamable** — yes: DSML is DeepSeek's own tool-call format. Re-applying
   after a sync is the `if` in the `stop` branch, `hasToolCallOnlyInThinking()`
   and the two specs.
+
+## Gemini compatibility across model switches, MCP tool schemas, and compaction
+
+- **What** — three narrow guards for running Gemini models over OpenAI-compatible
+  gateways:
+  1. `patches/@earendil-works__pi-ai@1.3.0.patch` (`dist/api/openai-completions.js`):
+     when replaying an assistant tool-call turn to a Gemini model and none of its
+     calls carries a Gemini `thoughtSignature` (e.g. after switching from GPT or
+     Claude), emit `extra_content.google.thought_signature = "skip_thought_signature_validator"`
+     on the first tool call only. Same-model Gemini turns keep their real signature.
+  2. `packages/llm/llm-pi-ai/src/context.ts`: for Gemini models only, inline local
+     `$ref` targets (breaking cycles as `{ type: 'object' }`) and strip keywords
+     Gemini's function-declaration validator rejects (`$defs`, `definitions`,
+     `$schema`, `$id`, `$anchor`, `$dynamicAnchor`, `$vocabulary`, `$comment`,
+     `additionalProperties`, `$ref`), while preserving property names inside
+     `properties` / `patternProperties`.
+  3. `packages/compaction/compaction-basic/src/summarizer.ts`: forward
+     `reasoningEffort` from the active session header (or `agent.options`) when
+     summarization reuses the conversation model, and omit it when a separate
+     summarization model is configured.
+- **Why** — switching models mid-session into Gemini failed with HTTP 400
+  (`missing thought_signature`); attaching MCP servers whose tool schemas use
+  `$ref` / `$defs` / `additionalProperties` failed every Gemini turn with HTTP
+  400; and omitting `reasoningEffort` on cache-reusing compaction diverged from
+  the warm prefix cache whenever a session set an explicit effort.
+- **Upstreamable** — yes: each guard is small, isolated, and covered by unit
+  tests in `protocol-roundtrip.spec.ts`, `context.spec.ts`, and
+  `compaction-basic.spec.ts`.

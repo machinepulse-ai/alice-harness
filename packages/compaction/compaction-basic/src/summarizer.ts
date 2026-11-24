@@ -140,6 +140,11 @@ export async function summarizeWithLlm(
       'no provider/model available for summarization: set both BasicCompactionConfig summarization fields, route one request, or set both AgentOptions fields',
     )
   }
+  const reasoningEffort = configured !== undefined
+    ? undefined
+    : latest !== undefined
+      ? latest.reasoningEffort
+      : agent.options.reasoningEffort
 
   const assembler = new BlockAssembler()
   const messages: RequestMessage[] = [
@@ -152,6 +157,7 @@ export async function summarizeWithLlm(
   const options: GenerateOptions = {
     provider: target.provider,
     model: target.model,
+    ...reasoningEffort === undefined ? {} : { reasoningEffort },
     messages,
     toolHistory: agent.session.toolHistory(),
     ...input.tools === undefined ? {} : { tools: [...input.tools] },

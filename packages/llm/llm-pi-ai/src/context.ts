@@ -127,13 +127,88 @@ async function prepareRequestImages(
   return versions
 }
 
+const GEMINI_UNSUPPORTED_SCHEMA_KEYS = new Set([
+  '$schema',
+  '$id',
+  '$anchor',
+  '$dynamicAnchor',
+  '$vocabulary',
+  '$comment',
+  '$defs',
+  'definitions',
+  'additionalProperties',
+  '$ref',
+])
+
+function isGeminiModel(model: string): boolean {
+  return /(?:^|\/)gemini(?:$|[-.])/i.test(model)
+}
+
+function resolveJsonPointer(root: Record<string, unknown>, ref: string): Record<string, unknown> | undefined {
+  if (!ref.startsWith('#/')) return undefined
+  let current: unknown = root
+  for (const raw of ref.slice(2).split('/')) {
+    if (typeof current !== 'object' || current === null || Array.isArray(current)) return undefined
+    const segment = raw.replaceAll('~1', '/').replaceAll('~0', '~')
+    current = (current as Record<string, unknown>)[segment]
+  }
+  return typeof current === 'object' && current !== null && !Array.isArray(current)
+    ? current as Record<string, unknown>
+    : undefined
+}
+
+function sanitizeGeminiObject(
+  obj: Record<string, unknown>,
+  root: Record<string, unknown>,
+  visiting: ReadonlySet<string>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(obj)) {
+    if (GEMINI_UNSUPPORTED_SCHEMA_KEYS.has(key)) continue
+    if ((key === 'properties' || key === 'patternProperties')
+      && typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      const props: Record<string, unknown> = {}
+      for (const [propName, propSchema] of Object.entries(value as Record<string, unknown>)) {
+        props[propName] = sanitizeGeminiSchema(propSchema, root, visiting)
+      }
+      out[key] = props
+      continue
+    }
+    out[key] = sanitizeGeminiSchema(value, root, visiting)
+  }
+  return out
+}
+
+/** Inline local $ref targets and strip JSON Schema keywords Gemini rejects. */
+function sanitizeGeminiSchema(
+  node: unknown,
+  root: Record<string, unknown>,
+  visiting: ReadonlySet<string> = new Set(),
+): unknown {
+  if (Array.isArray(node)) return node.map(item => sanitizeGeminiSchema(item, root, visiting))
+  if (typeof node !== 'object' || node === null) return node
+  const obj = node as Record<string, unknown>
+  if (typeof obj['$ref'] === 'string') {
+    const ref = obj['$ref']
+    const target = visiting.has(ref) ? undefined : resolveJsonPointer(root, ref)
+    const resolved = target === undefined
+      ? { type: 'object' }
+      : sanitizeGeminiSchema(target, root, new Set(visiting).add(ref)) as Record<string, unknown>
+    return { ...resolved, ...sanitizeGeminiObject(obj, root, visiting) }
+  }
+  return sanitizeGeminiObject(obj, root, visiting)
+}
+
 /** Convert a projected declaration without its harness-owned activation marker. */
-function piTool(tool: NonNullable<GenerateOptions['tools']>[number]): PiTool {
-  return { name: tool.name, description: tool.description, parameters: tool.parameters }
+function piTool(tool: NonNullable<GenerateOptions['tools']>[number], model: string): PiTool {
+  const parameters = isGeminiModel(model)
+    ? sanitizeGeminiSchema(tool.parameters, tool.parameters) as PiTool['parameters']
+    : tool.parameters
+  return { name: tool.name, description: tool.description, parameters }
 }
 
 function toolsOf(options: GenerateOptions): PiTool[] | undefined {
-  return options.tools?.filter(tool => !tool.deferLoading).map(piTool)
+  return options.tools?.filter(tool => !tool.deferLoading).map(tool => piTool(tool, options.model))
 }
 
 /** The request split into pi-ai's initial `systemPrompt` slot and the history that converts to `messages`. */
@@ -180,7 +255,7 @@ function appendDeveloper(message: Extract<Message, { role: 'developer' }>, optio
       case 'tool-addition': {
         const tool = options.tools?.find(tool => tool.name === block.toolName)
         if (tool === undefined) throw new LlmError(`pi-ai tool update references undeclared tool "${block.toolName}"`, 'INVALID_REQUEST')
-        toolsAdded.push(piTool(tool))
+        toolsAdded.push(piTool(tool, options.model))
         break
       }
       case 'tool-removal':
